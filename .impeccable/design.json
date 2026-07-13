@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-13T16:32:00Z",
+  "title": "Design System: Antigravity Quota Widget",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Active Gold",
+        "canonical": "oklch(70% 0.17 65)"
+      },
+      "neutral-bg": {
+        "role": "neutral",
+        "displayName": "GitHub Dark Canvas",
+        "canonical": "oklch(18% 0.01 240)"
+      },
+      "neutral-surface": {
+        "role": "neutral",
+        "displayName": "Surface Container",
+        "canonical": "oklch(22% 0.01 240)"
+      },
+      "neutral-text": {
+        "role": "neutral",
+        "displayName": "Ink Primary",
+        "canonical": "oklch(88% 0.01 240)"
+      },
+      "neutral-muted": {
+        "role": "neutral",
+        "displayName": "Ink Muted",
+        "canonical": "oklch(65% 0.01 240)"
+      },
+      "border-color": {
+        "role": "neutral",
+        "displayName": "Border Gray",
+        "canonical": "oklch(32% 0.01 240)"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Remaining quota count"
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Meta labels and secondary information"
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Smooth width transitions for the quota bar"
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Widget Container",
+      "kind": "card",
+      "refersTo": "widget-container",
+      "description": "Standard container for the desktop widget",
+      "html": "<div class=\"ds-widget-container\">\n  <div class=\"ds-header\">\n    <span class=\"ds-label\">Quota</span>\n    <span class=\"ds-status-dot\"></span>\n  </div>\n  <div class=\"ds-numbers\">\n    <span class=\"ds-display\">350</span>\n    <span class=\"ds-body\">/ 500</span>\n  </div>\n  <div class=\"ds-progress-track\">\n    <div class=\"ds-progress-fill\" style=\"width: 70%\"></div>\n  </div>\n  <div class=\"ds-footer\">Updated 3m ago</div>\n</div>",
+      "css": ".ds-widget-container { background: #0d1117; color: #c9d1d9; border: 1px solid #30363d; border-radius: 8px; padding: 12px; font-family: Inter, system-ui, sans-serif; width: 150px; height: 80px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; }\n.ds-header { display: flex; justify-content: space-between; align-items: center; }\n.ds-label { font-size: 10px; font-weight: 500; text-transform: uppercase; color: #8b949e; letter-spacing: 0.05em; }\n.ds-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #2ea44f; }\n.ds-numbers { display: flex; align-items: baseline; gap: 4px; }\n.ds-display { font-size: 20px; font-weight: 600; color: #c9d1d9; }\n.ds-body { font-size: 12px; color: #8b949e; }\n.ds-progress-track { height: 4px; background: #21262d; border-radius: 2px; overflow: hidden; }\n.ds-progress-fill { height: 100%; background: #f0883e; border-radius: 2px; transition: width 0.3s ease; }\n.ds-footer { font-size: 9px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.02em; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Ambient Dashboard Status",
+    "overview": "A minimal, high-contrast desktop widget that blends into the background of a developer's desktop. It mimics the clean, utilitarian, and distraction-free dark gray aesthetic of GitHub and the Antigravity IDE.",
+    "keyCharacteristics": [
+      "Sleek Utility: Flat dark grays with a sharp gold-orange progress bar indicator.",
+      "Glanceability: Clear, highly legible text sizes that can be scanned in milliseconds.",
+      "Atmospheric State: Changes contrast and saturation dynamically when the network or API state changes."
+    ],
+    "rules": [
+      {
+        "name": "The Singularity Rule",
+        "body": "Only the active progress bar and current remaining count may use the Active Gold accent. All other labels and metadata must remain in Neutral colors.",
+        "section": "colors"
+      },
+      {
+        "name": "The Clean Line Rule",
+        "body": "All text elements must use uppercase for small labels under 10px to ensure maximum crispness and block-alignment at small sizes.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-Surface Rule",
+        "body": "No drop shadows are allowed on the widget container. Separation from the wallpaper is achieved strictly via the thin Border Gray outline and the solid GitHub Dark background.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do desaturate the widget (opacity 0.6, colors shifted to grayscale) when the application cache is outdated or offline.",
+      "Do keep the widget size fixed to 150x80px to fit standard desktop grid spacings.",
+      "Do align the progress bar flush with the bottom or side of the layout."
+    ],
+    "donts": [
+      "Don't use any card drop shadows or container blurs (glassmorphism).",
+      "Don't use neon green or neon blue gradient highlights.",
+      "Don't allow mouse clicks or hover triggers on the widget itself while on the desktop (keep click-through enabled)."
+    ]
+  }
+}
