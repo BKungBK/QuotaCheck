@@ -92,7 +92,12 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
         );
 
         // 5. Make the window Click-through and Layered (transparent/overlay support)
-        let ex_style = GetWindowLongPtrW(tauri_hwnd, GWL_EXSTYLE);
+        let mut ex_style = GetWindowLongPtrW(tauri_hwnd, GWL_EXSTYLE);
+        // Clear window borders/edges that might be present to prevent drawing artifacts
+        ex_style &= !(windows::Win32::UI::WindowsAndMessaging::WS_EX_CLIENTEDGE.0
+            | windows::Win32::UI::WindowsAndMessaging::WS_EX_WINDOWEDGE.0
+            | windows::Win32::UI::WindowsAndMessaging::WS_EX_DLGMODALFRAME.0
+            | windows::Win32::UI::WindowsAndMessaging::WS_EX_STATICEDGE.0) as isize;
         let _ = SetWindowLongPtrW(
             tauri_hwnd,
             GWL_EXSTYLE,
@@ -116,28 +121,32 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
         let work_w = work_area.right - work_area.left;
         let work_h = work_area.bottom - work_area.top;
 
-        let widget_w = 220;
-        let widget_h = 220;
+        // Scale logical sizes to physical pixels using the window's scale factor
+        let scale_factor = window.scale_factor().unwrap_or(1.0);
+        let widget_w = (220.0 * scale_factor) as i32;
+        let widget_h = (220.0 * scale_factor) as i32;
+        let offset_x = (config.offset_x as f64 * scale_factor) as i32;
+        let offset_y = (config.offset_y as f64 * scale_factor) as i32;
 
         let mut x = work_area.left;
         let mut y = work_area.top;
 
         match config.position_corner.as_str() {
             "top-left" => {
-                x += config.offset_x;
-                y += config.offset_y;
+                x += offset_x;
+                y += offset_y;
             }
             "top-right" => {
-                x += work_w - widget_w - config.offset_x;
-                y += config.offset_y;
+                x += work_w - widget_w - offset_x;
+                y += offset_y;
             }
             "bottom-left" => {
-                x += config.offset_x;
-                y += work_h - widget_h - config.offset_y;
+                x += offset_x;
+                y += work_h - widget_h - offset_y;
             }
             _ => { // "bottom-right"
-                x += work_w - widget_w - config.offset_x;
-                y += work_h - widget_h - config.offset_y;
+                x += work_w - widget_w - offset_x;
+                y += work_h - widget_h - offset_y;
             }
         }
 
