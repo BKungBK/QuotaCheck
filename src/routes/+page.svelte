@@ -73,31 +73,31 @@
   });
 </script>
 
-<main class="w-full h-full p-4 flex flex-col justify-between box-border bg-[#0d0e11]/90 backdrop-blur-md border border-[#21262d] rounded-2xl select-none overflow-hidden relative">
+<main class="w-full h-full p-4 flex flex-col justify-between box-border bg-[#1e1e1e] border border-[#333333] select-none overflow-hidden relative">
   <!-- Top bar -->
   <div class="flex justify-between items-center w-full z-10">
     <div class="flex items-center gap-1.5">
-      <svg class="w-3.5 h-3.5 text-[#58a6ff]" viewBox="0 0 16 16" fill="currentColor">
+      <svg class="w-3.5 h-3.5 text-[#007acc]" viewBox="0 0 16 16" fill="currentColor">
         <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm0 14.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13z"/>
         <path d="M8 3a5 5 0 00-5 5h2a3 3 0 013-3V3z"/>
       </svg>
-      <span class="text-[10px] font-semibold tracking-wider text-[#8b949e] uppercase">Antigravity</span>
+      <span class="text-[10px] font-semibold tracking-wider text-[#969696] uppercase">Antigravity</span>
     </div>
 
     <!-- Status badge -->
     {#if isOffline}
-      <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#311c1e] border border-[#f85149]/20 text-[9px] text-[#f85149] font-medium">
-        <span class="w-1 h-1 rounded-full bg-[#f85149] animate-pulse"></span>
+      <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#311c1e] border border-[#f85149]/20 text-[9px] text-[#f85149] font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#f85149] animate-pulse"></span>
         Offline
       </div>
     {:else if source === "local"}
-      <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#102a1b] border border-[#39d353]/20 text-[9px] text-[#39d353] font-medium">
-        <span class="w-1 h-1 rounded-full bg-[#39d353]"></span>
+      <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#102a1b] border border-[#39d353]/20 text-[9px] text-[#39d353] font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#39d353]"></span>
         Local
       </div>
     {:else}
-      <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#132641] border border-[#58a6ff]/20 text-[9px] text-[#58a6ff] font-medium">
-        <span class="w-1 h-1 rounded-full bg-[#58a6ff]"></span>
+      <div class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#132641] border border-[#007acc]/20 text-[9px] text-[#007acc] font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#007acc]"></span>
         Cloud
       </div>
     {/if}
@@ -106,19 +106,13 @@
   <!-- Circle Gauge Center -->
   <div class="flex justify-center items-center relative my-auto">
     <svg class="w-28 h-28 transform -rotate-90">
-      <defs>
-        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="3" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-      </defs>
       <!-- Track -->
       <circle
         cx="56"
         cy="56"
         r="48"
-        class="stroke-[#161b22]"
-        stroke-width="7"
+        class="stroke-[#2d2d2d]"
+        stroke-width="8"
         fill="transparent"
       />
       <!-- Progress Fill -->
@@ -127,34 +121,33 @@
           cx="56"
           cy="56"
           r="48"
-          class="stroke-[#58a6ff] transition-all duration-500 ease-out"
-          stroke-width="7"
+          class="stroke-[#007acc] transition-all duration-500 ease-out"
+          stroke-width="8"
           fill="transparent"
           stroke-dasharray="301.6"
           stroke-dashoffset={301.6 - (301.6 * percent) / 100}
           stroke-linecap="round"
-          filter="url(#glow)"
         />
       {/if}
     </svg>
 
     <!-- Absolute Center Text -->
     <div class="absolute flex flex-col items-center justify-center text-center">
-      <span class="text-2xl font-bold tracking-tight text-white">{remaining}</span>
-      <span class="text-[9px] font-semibold text-[#8b949e] uppercase mt-0.5">/ {total}</span>
+      <span class="text-2xl font-bold tracking-tight text-white">{remaining.toLocaleString()}</span>
+      <span class="text-[9px] font-semibold text-[#969696] uppercase mt-0.5">/ {total.toLocaleString()}</span>
     </div>
   </div>
 
   <!-- Bottom Details Grid -->
-  <div class="grid grid-cols-2 gap-2 border-t border-[#21262d] pt-2.5 w-full z-10">
+  <div class="grid grid-cols-2 gap-2 border-t border-[#333333] pt-2.5 w-full z-10">
     <div class="flex flex-col">
-      <span class="text-[7.5px] font-bold text-[#8b949e] tracking-wider uppercase">Source</span>
+      <span class="text-[7.5px] font-bold text-[#969696] tracking-wider uppercase">Source</span>
       <span class="text-[10px] font-medium text-white mt-0.5">
         {isOffline ? "Disconnected" : source === "local" ? "Local Agent" : "Cloud Pa API"}
       </span>
     </div>
     <div class="flex flex-col items-end">
-      <span class="text-[7.5px] font-bold text-[#8b949e] tracking-wider uppercase">Updated</span>
+      <span class="text-[7.5px] font-bold text-[#969696] tracking-wider uppercase">Updated</span>
       <span class="text-[10px] font-medium text-white mt-0.5">{timeAgo}</span>
     </div>
   </div>
@@ -164,7 +157,7 @@
   :global(body) {
     margin: 0;
     padding: 0;
-    background: transparent !important;
+    background: #1e1e1e !important;
     overflow: hidden;
   }
 </style>

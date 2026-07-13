@@ -2,8 +2,22 @@ use std::fs;
 use serde::Deserialize;
 use reqwest::Client;
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
-struct LoopbackResponse {
+struct GoogleQuota {
+    total: u64,
+    used: u64,
+    #[serde(rename = "resetTime")]
+    reset_time: String,
+}
+
+#[derive(Deserialize, Debug)]
+struct QuotaResponseGoogle {
+    quota: GoogleQuota,
+}
+
+#[derive(Deserialize, Debug)]
+struct QuotaResponseDirect {
     remaining: u32,
     total: u32,
 }
@@ -11,12 +25,6 @@ struct LoopbackResponse {
 #[derive(Deserialize, Debug)]
 struct TokenResponse {
     access_token: String,
-}
-
-#[derive(Deserialize, Debug)]
-struct QuotaResponse {
-    remaining: u32,
-    total: u32,
 }
 
 #[allow(dead_code)]
@@ -85,8 +93,14 @@ pub async fn fetch_quota(config: &super::config::Config) -> Result<(u32, u32, St
 
     // Priority 1: Local Loopback Server (Antigravity is running)
     if let Ok(res) = client.get("http://localhost:8999/quota").send().await {
-        if let Ok(data) = res.json::<LoopbackResponse>().await {
-            return Ok((data.remaining, data.total, "local".to_string()));
+        if let Ok(body) = res.text().await {
+            if let Ok(data) = serde_json::from_str::<QuotaResponseGoogle>(&body) {
+                let remaining = (data.quota.total - data.quota.used) as u32;
+                let total = data.quota.total as u32;
+                return Ok((remaining, total, "local".to_string()));
+            } else if let Ok(data) = serde_json::from_str::<QuotaResponseDirect>(&body) {
+                return Ok((data.remaining, data.total, "local".to_string()));
+            }
         }
     }
 
@@ -114,6 +128,12 @@ pub async fn fetch_quota(config: &super::config::Config) -> Result<(u32, u32, St
         .await
         .map_err(|e| format!("OAuth request failed: {}", e))?;
 
+    if !auth_res.status().is_success() {
+        let status = auth_res.status();
+        let err_body = auth_res.text().await.unwrap_or_default();
+        return Err(format!("OAuth exchange failed ({}): {}", status, err_body));
+    }
+
     let token_data = auth_res.json::<TokenResponse>().await
         .map_err(|e| format!("Failed to parse token response: {}", e))?;
 
@@ -125,8 +145,33 @@ pub async fn fetch_quota(config: &super::config::Config) -> Result<(u32, u32, St
         .await
         .map_err(|e| format!("Quota request failed: {}", e))?;
 
-    let quota_data = quota_res.json::<QuotaResponse>().await
-        .map_err(|e| format!("Failed to parse quota response: {}", e))?;
+    if !quota_res.status().is_success() {
+        let status = quota_res.status();
+        let err_body = quota_res.text().await.unwrap_or_default();
+        return Err(format!("Quota API returned error ({}): {}", status, err_body));
+    }
 
-    Ok((quota_data.remaining, quota_data.total, "cloud".to_string()))
+    let body_text = quota_res.text().await
+        .map_err(|e| format!("Failed to read quota body: {}", e))?;
+
+    let quota_data: QuotaResponseGoogle = serde_json::from_str(&body_text)
+        .map_err(|e| format!("Failed to parse Google quota response: {}, body: {}", e, body_text))?;
+
+    let remaining = (quota_data.quota.total - quota_data.quota.used) as u32;
+    let total = quota_data.quota.total as u32;
+
+    Ok((remaining, total, "cloud".to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_fetch_quota() {
+        let config = crate::config::Config::default();
+        let res = fetch_quota(&config).await;
+        println!("FETCH QUOTA RESULT: {:?}", res);
+        assert!(res.is_ok(), "Expected fetch_quota to succeed, got: {:?}", res);
+    }
 }

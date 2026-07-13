@@ -4,7 +4,7 @@ use windows::Win32::Foundation::{HWND, LPARAM, WPARAM, RECT};
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowW, FindWindowExW, SendMessageTimeoutW, EnumWindows, GetClassNameW,
     SetParent, SetWindowLongPtrW, GetWindowLongPtrW, GWL_STYLE, GWL_EXSTYLE,
-    WS_CHILD, WS_POPUP, WS_CAPTION, WS_THICKFRAME, WS_SYSMENU,
+    WS_CHILD, WS_VISIBLE, WS_CLIPSIBLINGS, WS_CLIPCHILDREN,
     WS_EX_TRANSPARENT, WS_EX_LAYERED, SMTO_NORMAL, GetWindow, GW_HWNDNEXT,
     SetWindowPos, SWP_NOZORDER, SWP_FRAMECHANGED,
 };
@@ -83,15 +83,15 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
         // 3. Reparent the Tauri window to WorkerW
         let _ = SetParent(tauri_hwnd, Some(workerw));
 
-        // 4. Strip all decorations (caption, thick frame, popup, sysmenu) and make it a child window
-        let style = GetWindowLongPtrW(tauri_hwnd, GWL_STYLE);
+        // 4. Force pure borderless child window styles with no decorations
+        let new_style = WS_CHILD.0 | WS_VISIBLE.0 | WS_CLIPSIBLINGS.0 | WS_CLIPCHILDREN.0;
         let _ = SetWindowLongPtrW(
             tauri_hwnd,
             GWL_STYLE,
-            (style & !(WS_POPUP.0 | WS_CAPTION.0 | WS_THICKFRAME.0 | WS_SYSMENU.0) as isize) | WS_CHILD.0 as isize,
+            new_style as isize,
         );
 
-        // 5. Make the window Click-through and Layered (transparent background support)
+        // 5. Make the window Click-through and Layered (transparent/overlay support)
         let ex_style = GetWindowLongPtrW(tauri_hwnd, GWL_EXSTYLE);
         let _ = SetWindowLongPtrW(
             tauri_hwnd,
