@@ -58,15 +58,17 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
         let mut new_cache = config::load_cache();
 
         match quota_client::fetch_quota(&config).await {
-            Ok((remaining, total)) => {
+            Ok((remaining, total, src)) => {
                 new_cache.remaining = remaining;
                 new_cache.total = total;
                 new_cache.is_offline = false;
+                new_cache.source = src;
                 new_cache.last_updated = chrono::Utc::now().to_rfc3339();
                 let _ = config::save_cache(&new_cache);
             }
             Err(_) => {
                 new_cache.is_offline = true;
+                new_cache.source = String::new();
             }
         }
 

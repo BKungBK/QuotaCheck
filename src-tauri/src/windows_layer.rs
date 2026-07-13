@@ -1,12 +1,15 @@
 use tauri::WebviewWindow;
 use windows::core::BOOL;
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM, RECT};
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowW, FindWindowExW, SendMessageTimeoutW, EnumWindows, GetClassNameW,
     SetParent, SetWindowLongPtrW, GetWindowLongPtrW, GWL_STYLE, GWL_EXSTYLE,
     WS_CHILD, WS_POPUP, WS_CAPTION, WS_THICKFRAME, WS_SYSMENU,
     WS_EX_TRANSPARENT, WS_EX_LAYERED, SMTO_NORMAL, GetWindow, GW_HWNDNEXT,
     SetWindowPos, SWP_NOZORDER, SWP_FRAMECHANGED,
+};
+use windows::Win32::Graphics::Gdi::{
+    MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
 };
 
 struct EnumContext {
@@ -96,21 +99,28 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
             ex_style | (WS_EX_TRANSPARENT.0 | WS_EX_LAYERED.0) as isize,
         );
 
-        // 6. Calculate position based on Config
+        // 6. Calculate position based on Config and GDI Work Area (ignoring taskbar)
         let config = crate::config::load_config();
-        let monitors = window.available_monitors().map_err(|e| e.to_string())?;
-        let monitor = monitors.get(config.monitor_index)
-            .or_else(|| monitors.first())
-            .ok_or_else(|| "No monitors found".to_string())?;
+        
+        let mut monitor_info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            rcMonitor: RECT::default(),
+            rcWork: RECT::default(),
+            dwFlags: 0,
+        };
 
-        let pos = monitor.position();
-        let size = monitor.size();
+        let hmonitor = MonitorFromWindow(tauri_hwnd, MONITOR_DEFAULTTOPRIMARY);
+        let _ = GetMonitorInfoW(hmonitor, &mut monitor_info);
 
-        let widget_w = 150;
-        let widget_h = 80;
+        let work_area = monitor_info.rcWork;
+        let work_w = work_area.right - work_area.left;
+        let work_h = work_area.bottom - work_area.top;
 
-        let mut x = pos.x;
-        let mut y = pos.y;
+        let widget_w = 220;
+        let widget_h = 220;
+
+        let mut x = work_area.left;
+        let mut y = work_area.top;
 
         match config.position_corner.as_str() {
             "top-left" => {
@@ -118,16 +128,16 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
                 y += config.offset_y;
             }
             "top-right" => {
-                x += size.width as i32 - widget_w - config.offset_x;
+                x += work_w - widget_w - config.offset_x;
                 y += config.offset_y;
             }
             "bottom-left" => {
                 x += config.offset_x;
-                y += size.height as i32 - widget_h - config.offset_y;
+                y += work_h - widget_h - config.offset_y;
             }
             _ => { // "bottom-right"
-                x += size.width as i32 - widget_w - config.offset_x;
-                y += size.height as i32 - widget_h - config.offset_y;
+                x += work_w - widget_w - config.offset_x;
+                y += work_h - widget_h - config.offset_y;
             }
         }
 

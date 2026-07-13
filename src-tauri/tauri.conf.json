@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "Quota Widget",
-        "width": 150,
-        "height": 80,
+        "width": 220,
+        "height": 220,
         "decorations": false,
         "transparent": true,
         "resizable": false,

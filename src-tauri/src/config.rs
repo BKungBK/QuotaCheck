@@ -35,6 +35,7 @@ pub struct Cache {
     pub total: u32,
     pub last_updated: String,
     pub is_offline: bool,
+    pub source: String,
 }
 
 impl Default for Cache {
@@ -44,6 +45,7 @@ impl Default for Cache {
             total: 0,
             last_updated: String::new(),
             is_offline: true,
+            source: String::new(),
         }
     }
 }
