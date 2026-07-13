@@ -1,5 +1,6 @@
 pub mod config;
 pub mod windows_layer;
+pub mod quota_client;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
