@@ -53,7 +53,7 @@
   });
 </script>
 
-<main class="w-[150px] h-[80px] bg-[#1e1e1e] border border-[#333333] rounded-lg p-3 flex flex-col justify-between select-none box-border overflow-hidden {isOffline ? 'opacity-60 grayscale' : ''}">
+<main class="w-full h-full bg-[#1e1e1e] border border-[#333333] rounded-lg p-3 flex flex-col justify-between select-none box-border overflow-hidden {isOffline ? 'opacity-60 grayscale' : ''}">
   <div class="flex justify-between items-center">
     <span class="text-[10px] font-medium tracking-wider text-[#969696] uppercase">Quota</span>
     <span class="w-[6px] h-[6px] rounded-full {isOffline ? 'bg-red-500' : 'bg-green-500'}"></span>
