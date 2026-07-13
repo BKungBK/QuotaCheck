@@ -1,10 +1,10 @@
-use tauri::Window;
+use tauri::WebviewWindow;
 use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, SendMessageTimeoutW, EnumWindows, GetClassNameW,
+    FindWindowW, FindWindowExW, SendMessageTimeoutW, EnumWindows, GetClassNameW,
     SetParent, SetWindowLongPtrW, GetWindowLongPtrW, GWL_EXSTYLE,
-    WS_EX_TRANSPARENT, WS_EX_LAYERED, SMTO_NORMAL,
+    WS_EX_TRANSPARENT, WS_EX_LAYERED, SMTO_NORMAL, GetWindow, GW_HWNDNEXT,
 };
 
 struct EnumContext {
@@ -19,12 +19,25 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
         let name = String::from_utf16_lossy(&class_name[..len as usize]);
         if name == "WorkerW" {
             // Find the WorkerW that has SHELLDLL_DefView child (under desktop icons)
-            if let Ok(shell_view) = FindWindowW(
+            if let Ok(shell_view) = FindWindowExW(
+                Some(hwnd),
+                None,
                 windows::core::w!("SHELLDLL_DefView"),
                 None
             ) {
                 if !shell_view.0.is_null() {
-                    context.workerw_hwnd = Some(hwnd);
+                    // This is the WorkerW containing the desktop icons.
+                    // The wallpaper WorkerW sits immediately behind it in Z-order.
+                    if let Ok(next_window) = GetWindow(hwnd, GW_HWNDNEXT) {
+                        let mut next_class = [0u16; 256];
+                        let next_len = GetClassNameW(next_window, &mut next_class);
+                        if next_len > 0 {
+                            let next_name = String::from_utf16_lossy(&next_class[..next_len as usize]);
+                            if next_name == "WorkerW" {
+                                context.workerw_hwnd = Some(next_window);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -32,7 +45,7 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
     BOOL(1)
 }
 
-pub fn setup_wallpaper_widget(window: &Window) -> Result<(), String> {
+pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
     unsafe {
         let tauri_hwnd = window.hwnd().map_err(|e| e.to_string())?;
 
