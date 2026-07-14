@@ -107,8 +107,8 @@
   }
 
   .widget {
-    width: 150px;
-    height: 110px;
+    width: 100vw;
+    height: 100vh;
     box-sizing: border-box;
     padding: 8px 12px;
     background: #1e1e1e;
