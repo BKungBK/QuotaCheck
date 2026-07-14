@@ -3,84 +3,98 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
 
+  interface QuotaPool {
+    label: string;
+    remaining_fraction: number;
+    reset_time: string | null;
+  }
+
   interface Cache {
-    remaining: number;
-    total: number;
+    pools: QuotaPool[];
     last_updated: string;
     is_offline: boolean;
     source: string;
   }
 
-  let remaining = $state(0);
-  let total = $state(0);
+  let pools = $state<QuotaPool[]>([]);
   let isOffline = $state(true);
   let lastUpdated = $state("");
   let source = $state("");
 
-  let percent = $derived(total > 0 ? Math.min(100, Math.round((remaining / total) * 100)) : 0);
-
-  let timeAgo = $state("Never");
+  let now = $state(Date.now());
   $effect(() => {
-    const updateTime = () => {
-      if (!lastUpdated) {
-        timeAgo = "Never";
-        return;
-      }
-      const diffSecs = Math.floor((Date.now() - new Date(lastUpdated).getTime()) / 1000);
-      if (diffSecs < 10) timeAgo = "Now";
-      else if (diffSecs < 60) timeAgo = `${diffSecs}s`;
-      else {
-        const mins = Math.floor(diffSecs / 60);
-        timeAgo = mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h`;
-      }
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 5000);
+    const interval = setInterval(() => {
+      now = Date.now();
+    }, 5000);
     return () => clearInterval(interval);
   });
 
-  onMount(async () => {
-    try {
-      const cache = await invoke<Cache>("get_current_quota");
-      remaining = cache.remaining;
-      total = cache.total;
-      isOffline = cache.is_offline;
-      lastUpdated = cache.last_updated;
-      source = cache.source;
-    } catch (e) {
-      console.error("Failed to load initial cache", e);
-    }
+  let timeAgo = $derived.by(() => {
+    if (!lastUpdated) return "Never";
+    const diffSecs = Math.floor((now - new Date(lastUpdated).getTime()) / 1000);
+    if (diffSecs < 10) return "Now";
+    if (diffSecs < 60) return `${diffSecs}s`;
+    const mins = Math.floor(diffSecs / 60);
+    return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h`;
+  });
 
-    const unlisten = await listen<Cache>("quota-update", (event) => {
-      remaining = event.payload.remaining;
-      total = event.payload.total;
-      isOffline = event.payload.is_offline;
-      lastUpdated = event.payload.last_updated;
-      source = event.payload.source;
-    });
+  onMount(() => {
+    let unlisten: (() => void) | undefined;
 
-    return () => unlisten();
+    const init = async () => {
+      try {
+        const cache = await invoke<Cache>("get_current_quota");
+        pools = cache.pools || [];
+        isOffline = cache.is_offline;
+        lastUpdated = cache.last_updated;
+        source = cache.source;
+      } catch (e) {
+        console.error("Failed to load initial cache", e);
+      }
+
+      unlisten = await listen<Cache>("quota-update", (event) => {
+        pools = event.payload.pools || [];
+        isOffline = event.payload.is_offline;
+        lastUpdated = event.payload.last_updated;
+        source = event.payload.source;
+      });
+    };
+
+    init();
+
+    return () => {
+      if (unlisten) unlisten();
+    };
   });
 </script>
 
-<main class="widget" class:offline={isOffline}>
+<main class="widget" class:offline={isOffline} id="quota-widget">
   <div class="row-top">
-    <span class="label">Antigravity</span>
-    <span class="dot" class:dot-blue={!isOffline}></span>
+    <h1 class="label" id="widget-title">Antigravity</h1>
+    <span class="dot" class:dot-blue={!isOffline} id="widget-status-dot"></span>
   </div>
 
-  <div class="row-mid">
-    <span class="count">{remaining.toLocaleString()}</span>
-    <span class="of">/ {total.toLocaleString()}</span>
+  <div class="pools-container" id="quota-pools-list">
+    {#each pools as pool}
+      <div class="pool-row" id="pool-{pool.label.toLowerCase()}">
+        <div class="pool-meta">
+          <span class="pool-label">{pool.label}</span>
+          <span class="pool-percent">{Math.min(100, Math.round(pool.remaining_fraction * 100))}%</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: {isOffline ? 0 : pool.remaining_fraction * 100}%"></div>
+        </div>
+      </div>
+    {:else}
+      <div class="no-pools" id="no-pools-placeholder">
+        <span class="placeholder-text">{isOffline ? "Offline" : "No Pools"}</span>
+      </div>
+    {/each}
   </div>
 
   <div class="row-bottom">
-    <span class="meta">{isOffline ? "Offline" : source === "local" ? "Local" : "Cloud"}</span>
-    <span class="meta">{timeAgo}</span>
-  </div>
-
-  <div class="bar-track">
-    <div class="bar-fill" style="width: {isOffline ? 0 : percent}%"></div>
+    <span class="meta" id="quota-source">{isOffline ? "Offline" : source === "local" ? "Local" : "Cloud"}</span>
+    <span class="meta" id="quota-time-ago">{timeAgo}</span>
   </div>
 </main>
 
@@ -94,9 +108,9 @@
 
   .widget {
     width: 150px;
-    height: 80px;
+    height: 110px;
     box-sizing: border-box;
-    padding: 12px;
+    padding: 8px 12px;
     background: #1e1e1e;
     border: 1px solid #333333;
     border-radius: 8px;
@@ -122,12 +136,13 @@
   }
 
   .label {
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     font-weight: 500;
     line-height: 1.1;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: #969696;
+    margin: 0;
   }
 
   .dot {
@@ -141,29 +156,57 @@
     background: #007acc;
   }
 
-  .row-mid {
+  .pools-container {
     display: flex;
-    align-items: baseline;
-    gap: 4px;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: center;
+    flex-grow: 1;
+    margin: 4px 0;
   }
 
-  .count {
-    font-size: 1.25rem;
+  .pool-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .pool-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    line-height: 1;
+  }
+
+  .pool-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #969696;
+  }
+
+  .pool-percent {
+    font-size: 0.75rem;
     font-weight: 600;
-    line-height: 1.2;
-    letter-spacing: -0.01em;
     color: #007acc;
   }
 
-  .widget.offline .count {
+  .widget.offline .pool-percent {
     color: #ffffff;
   }
 
-  .of {
-    font-size: 0.875rem;
-    font-weight: 400;
-    line-height: 1.4;
+  .no-pools {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+  }
+
+  .placeholder-text {
+    font-size: 0.75rem;
+    font-weight: 500;
     color: #969696;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   .row-bottom {
@@ -172,7 +215,7 @@
   }
 
   .meta {
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     font-weight: 500;
     letter-spacing: 0.04em;
     text-transform: uppercase;

@@ -30,9 +30,17 @@ impl Default for Config {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct QuotaPool {
+    pub label: String,
+    #[serde(rename = "remainingFraction")]
+    pub remaining_fraction: f64,
+    #[serde(rename = "resetTime")]
+    pub reset_time: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Cache {
-    pub remaining: u32,
-    pub total: u32,
+    pub pools: Vec<QuotaPool>,
     pub last_updated: String,
     pub is_offline: bool,
     pub source: String,
@@ -41,8 +49,7 @@ pub struct Cache {
 impl Default for Cache {
     fn default() -> Self {
         Self {
-            remaining: 0,
-            total: 0,
+            pools: Vec::new(),
             last_updated: String::new(),
             is_offline: true,
             source: String::new(),
@@ -107,7 +114,7 @@ mod tests {
     #[test]
     fn test_cache_defaults() {
         let cache = Cache::default();
-        assert_eq!(cache.remaining, 0);
+        assert!(cache.pools.is_empty());
         assert_eq!(cache.is_offline, true);
     }
 }

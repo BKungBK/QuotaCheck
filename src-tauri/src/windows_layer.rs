@@ -5,7 +5,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowW, FindWindowExW, SendMessageTimeoutW, EnumWindows, GetClassNameW,
     SetParent, SetWindowLongPtrW, GetWindowLongPtrW, GWL_STYLE, GWL_EXSTYLE,
     WS_CHILD, WS_VISIBLE, WS_CLIPSIBLINGS, WS_CLIPCHILDREN,
-    WS_EX_TRANSPARENT, WS_EX_LAYERED, SMTO_NORMAL, GetWindow, GW_HWNDNEXT,
+    WS_EX_TRANSPARENT, SMTO_NORMAL, GetWindow, GW_HWNDNEXT,
     SetWindowPos, SWP_NOZORDER, SWP_FRAMECHANGED,
 };
 use windows::Win32::Graphics::Gdi::{
@@ -101,7 +101,7 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
         let _ = SetWindowLongPtrW(
             tauri_hwnd,
             GWL_EXSTYLE,
-            ex_style | (WS_EX_TRANSPARENT.0 | WS_EX_LAYERED.0) as isize,
+            ex_style | WS_EX_TRANSPARENT.0 as isize,
         );
 
         // 6. Calculate position based on Config and GDI Work Area (ignoring taskbar)
@@ -123,8 +123,8 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
 
         // Scale logical sizes to physical pixels using the window's scale factor
         let scale_factor = window.scale_factor().unwrap_or(1.0);
-        let widget_w = (220.0 * scale_factor) as i32;
-        let widget_h = (220.0 * scale_factor) as i32;
+        let widget_w = (150.0 * scale_factor) as i32;
+        let widget_h = (110.0 * scale_factor) as i32;
         let offset_x = (config.offset_x as f64 * scale_factor) as i32;
         let offset_y = (config.offset_y as f64 * scale_factor) as i32;
 

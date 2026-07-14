@@ -12,6 +12,8 @@ use tauri::tray::TrayIconBuilder;
 struct AppState {
     cache: Mutex<config::Cache>,
     refresh_trigger: mpsc::Sender<()>,
+    client: reqwest::Client,
+    local_client: reqwest::Client,
 }
 
 #[tauri::command]
@@ -38,12 +40,12 @@ fn is_near_reset(reset_time_str: &str) -> bool {
             .unwrap_or(now);
         
         let diff = today_reset.signed_duration_since(now).num_minutes();
-        if diff >= 0 && diff <= 15 {
+        if diff >= -5 && diff <= 15 {
             return true;
         }
         let tomorrow_reset = today_reset + chrono::Duration::days(1);
         let diff_tomorrow = tomorrow_reset.signed_duration_since(now).num_minutes();
-        if diff_tomorrow >= 0 && diff_tomorrow <= 15 {
+        if diff_tomorrow >= -5 && diff_tomorrow <= 15 {
             return true;
         }
     }
@@ -57,20 +59,19 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
         let config = config::load_config();
         let mut new_cache = config::load_cache();
 
-        match quota_client::fetch_quota(&config).await {
-            Ok((remaining, total, src)) => {
-                new_cache.remaining = remaining;
-                new_cache.total = total;
+        match quota_client::fetch_quota(&state.client, &state.local_client, &config).await {
+            Ok((pools, src)) => {
+                new_cache.pools = pools;
                 new_cache.is_offline = false;
                 new_cache.source = src;
                 new_cache.last_updated = chrono::Utc::now().to_rfc3339();
-                let _ = config::save_cache(&new_cache);
             }
             Err(_) => {
                 new_cache.is_offline = true;
                 new_cache.source = String::new();
             }
         }
+        let _ = config::save_cache(&new_cache);
 
         {
             let mut c = state.cache.lock().unwrap();
@@ -79,7 +80,7 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
 
         let _ = app_handle.emit("quota-update", new_cache);
 
-        let has_loopback = reqwest::Client::new()
+        let has_loopback = state.client
             .get("http://localhost:8999/quota")
             .send()
             .await
@@ -99,8 +100,12 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
 
         tokio::select! {
             _ = sleep(Duration::from_secs(delay_secs)) => {}
-            Some(_) = rx.recv() => {
-                heavy_usage_until = Some(chrono::Utc::now() + chrono::Duration::minutes(5));
+            res = rx.recv() => {
+                if res.is_some() {
+                    heavy_usage_until = Some(chrono::Utc::now() + chrono::Duration::minutes(5));
+                } else {
+                    break;
+                }
             }
         }
     }
@@ -156,9 +161,23 @@ fn toggle_autostart(enable: bool) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (tx, rx) = mpsc::channel(10);
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .build()
+        .unwrap_or_default();
+
+    let local_client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .timeout(Duration::from_secs(6))
+        .build()
+        .unwrap_or_default();
+
     let app_state = Arc::new(AppState {
         cache: Mutex::new(config::load_cache()),
         refresh_trigger: tx,
+        client,
+        local_client,
     });
 
     let state_clone = app_state.clone();
@@ -174,6 +193,7 @@ pub fn run() {
             let refresh = MenuItem::with_id(app, "refresh", "Refresh Now", true, None::<&str>).unwrap();
             
             let cfg = config::load_config();
+            let _ = toggle_autostart(cfg.autostart);
             let autostart = CheckMenuItem::with_id(
                 app,
                 "autostart",
