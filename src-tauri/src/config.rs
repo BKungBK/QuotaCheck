@@ -32,9 +32,7 @@ impl Default for Config {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct QuotaPool {
     pub label: String,
-    #[serde(rename = "remainingFraction")]
     pub remaining_fraction: f64,
-    #[serde(rename = "resetTime")]
     pub reset_time: Option<String>,
 }
 
