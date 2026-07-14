@@ -8,6 +8,8 @@ use tokio::time::{sleep, Duration};
 use tokio::sync::mpsc;
 use tauri::menu::{Menu, MenuItem, CheckMenuItem};
 use tauri::tray::TrayIconBuilder;
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
 
 struct AppState {
     cache: Mutex<config::Cache>,
@@ -160,6 +162,14 @@ fn toggle_autostart(enable: bool) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Declare Per-Monitor DPI awareness before any Win32 API calls.
+    // Without this, Windows silently virtualizes coordinates in GetMonitorInfoW
+    // and SetWindowPos, causing the widget to render at wrong physical positions.
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    }
+
     let (tx, rx) = mpsc::channel(10);
 
     let client = reqwest::Client::builder()
