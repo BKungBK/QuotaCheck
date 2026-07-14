@@ -11,7 +11,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::Win32::Graphics::Gdi::{
     MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
 };
-use windows::Win32::UI::HiDpi::GetDpiForWindow;
+use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 
 struct EnumContext {
     workerw_hwnd: Option<HWND>,
@@ -122,12 +122,14 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
         let work_w = work_area.right - work_area.left;
         let work_h = work_area.bottom - work_area.top;
 
-        // Scale logical sizes to physical pixels using the Win32 DPI for this window.
-        // We use GetDpiForWindow directly instead of window.scale_factor() because
+        // Scale logical sizes to physical pixels using the Win32 DPI for this monitor.
+        // We use GetDpiForMonitor directly instead of window.scale_factor() because
         // scale_factor() can return 1.0 during setup() before the window is attached
         // to the monitor/DPI context, causing incorrect physical pixel calculations.
-        let dpi = GetDpiForWindow(tauri_hwnd);
-        let scale_factor = if dpi > 0 { dpi as f64 / 96.0 } else { 1.0 };
+        let mut dpi_x: u32 = 96;
+        let mut dpi_y: u32 = 96;
+        let _ = GetDpiForMonitor(hmonitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y);
+        let scale_factor = dpi_x as f64 / 96.0;
         let widget_w = (150.0 * scale_factor) as i32;
         let widget_h = (110.0 * scale_factor) as i32;
         let offset_x = (config.offset_x as f64 * scale_factor) as i32;
