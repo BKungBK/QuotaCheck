@@ -87,6 +87,22 @@ unsafe extern "system" fn enum_monitors_callback(
     BOOL(1)
 }
 
+pub fn get_monitor_count() -> usize {
+    unsafe {
+        let mut context = MonitorListContext {
+            monitors: Vec::new(),
+            primary_idx: 0,
+        };
+        let context_ptr = &mut context as *mut MonitorListContext as isize;
+        let _ = EnumDisplayMonitors(None, None, Some(enum_monitors_callback), LPARAM(context_ptr));
+        if context.monitors.is_empty() {
+            1
+        } else {
+            context.monitors.len()
+        }
+    }
+}
+
 pub fn get_target_monitor_info(target_index: usize) -> MONITORINFO {
     unsafe {
         let mut context = MonitorListContext {
@@ -240,12 +256,40 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
 }
 
 pub async fn setup_with_retry(window: &WebviewWindow) {
-    for attempt in 0..5 {
-        match setup_wallpaper_widget(window) {
-            Ok(_) => break,
+    let mut attempt = 0u32;
+    loop {
+        attempt += 1;
+        let window_clone = window.clone();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        let run_res = window.run_on_main_thread(move || {
+            let res = setup_wallpaper_widget(&window_clone);
+            let _ = tx.send(res);
+        });
+
+        let setup_res = match run_res {
+            Ok(()) => match rx.await {
+                Ok(res) => res,
+                Err(_) => Err("Main thread task dropped".to_string()),
+            },
+            Err(e) => Err(format!("Failed to dispatch run_on_main_thread: {}", e)),
+        };
+
+        match setup_res {
+            Ok(_) => {
+                if attempt > 1 {
+                    eprintln!("setup_wallpaper_widget succeeded on attempt {}", attempt);
+                }
+                break;
+            }
             Err(e) => {
-                eprintln!("setup attempt {} failed: {}", attempt + 1, e);
-                tokio::time::sleep(std::time::Duration::from_millis(500 * (attempt + 1) as u64)).await;
+                eprintln!("setup attempt {} failed: {}", attempt, e);
+                let delay = if attempt < 5 {
+                    std::time::Duration::from_millis(500 * attempt as u64)
+                } else {
+                    std::time::Duration::from_secs(10)
+                };
+                tokio::time::sleep(delay).await;
             }
         }
     }
@@ -257,19 +301,22 @@ pub fn init_wallpaper_widget(window: WebviewWindow) {
 
     let window_clone = window.clone();
     tauri::async_runtime::spawn(async move {
-        // Initial setup with retry
+        // Initial setup with retry (Win32 calls marshaled to main thread)
         setup_with_retry(&window_clone).await;
 
-        // Subclass window procedure for display change events
-        if let Ok(hwnd) = window_clone.hwnd() {
-            unsafe {
-                let prev = GetWindowLongPtrW(hwnd, GWLP_WNDPROC);
-                if prev != 0 && PREV_WNDPROC.load(std::sync::atomic::Ordering::Relaxed) == 0 {
-                    PREV_WNDPROC.store(prev, std::sync::atomic::Ordering::Relaxed);
-                    SetWindowLongPtrW(hwnd, GWLP_WNDPROC, wallpaper_wndproc as *const () as isize);
+        // Subclass window procedure for display change events on main thread
+        let window_subclass = window_clone.clone();
+        let _ = window_clone.run_on_main_thread(move || {
+            if let Ok(hwnd) = window_subclass.hwnd() {
+                unsafe {
+                    let prev = GetWindowLongPtrW(hwnd, GWLP_WNDPROC);
+                    if prev != 0 && PREV_WNDPROC.load(std::sync::atomic::Ordering::Relaxed) == 0 {
+                        PREV_WNDPROC.store(prev, std::sync::atomic::Ordering::Relaxed);
+                        SetWindowLongPtrW(hwnd, GWLP_WNDPROC, wallpaper_wndproc as *const () as isize);
+                    }
                 }
             }
-        }
+        });
 
         // Debounced event handler loop
         while let Some(_) = rx.recv().await {

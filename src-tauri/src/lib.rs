@@ -19,6 +19,11 @@ struct AppState {
 }
 
 #[tauri::command]
+fn get_monitor_count() -> usize {
+    windows_layer::get_monitor_count()
+}
+
+#[tauri::command]
 fn get_current_quota(state: State<'_, AppState>) -> config::Cache {
     state.cache.lock().unwrap().clone()
 }
@@ -335,7 +340,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_current_quota, get_config, save_config, manual_refresh_trigger])
+        .invoke_handler(tauri::generate_handler![get_current_quota, get_config, save_config, manual_refresh_trigger, get_monitor_count])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

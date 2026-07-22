@@ -160,16 +160,19 @@ struct BackendQuotaPool {
     reset_time: Option<String>,
 }
 
-// ─── Debug logging helper ────────────────────────────────────────────────────
+// ─── Debug logging macro ────────────────────────────────────────────────────
 
-fn append_debug_log(msg: &str) {
-    if !cfg!(debug_assertions) { return; }
-    use std::fs::OpenOptions;
-    use std::io::Write;
-    let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
-    if let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&log_path) {
-        let _ = writeln!(f, "{}", msg);
-    }
+macro_rules! append_debug_log {
+    ($($arg:tt)*) => {
+        if cfg!(debug_assertions) {
+            use std::fs::OpenOptions;
+            use std::io::Write;
+            let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
+            if let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&log_path) {
+                let _ = writeln!(f, $($arg)*);
+            }
+        }
+    };
 }
 
 // ─── Endpoint cache ─────────────────────────────────────────────────────────
@@ -210,14 +213,14 @@ async fn detect_antigravity_process() -> Option<ProcessInfo> {
     let output = cmd.output().await.ok()?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        append_debug_log(&format!("WMI query failed: {}", stderr));
+        append_debug_log!("WMI query failed: {}", stderr);
         return None;
     }
 
     let json_str = String::from_utf8_lossy(&output.stdout);
     let json_str = json_str.trim();
     if json_str.is_empty() {
-        append_debug_log("WMI: no processes found");
+        append_debug_log!("WMI: no processes found");
         return None;
     }
 
@@ -256,10 +259,10 @@ async fn detect_antigravity_process() -> Option<ProcessInfo> {
                 .and_then(|p| p.parse::<u16>().ok())
                 .unwrap_or(0);
 
-            append_debug_log(&format!(
+            append_debug_log!(
                 "Detected: PID={}, name={}, csrf={:.8}…, ext_port={}",
                 proc.process_id, proc.name, csrf_token, extension_port
-            ));
+            );
 
             return Some(ProcessInfo {
                 csrf_token,
@@ -270,7 +273,7 @@ async fn detect_antigravity_process() -> Option<ProcessInfo> {
         }
     }
 
-    append_debug_log("No matching Antigravity process found");
+    append_debug_log!("No matching Antigravity process found");
     None
 }
 
@@ -334,7 +337,7 @@ async fn probe_port(client: &reqwest::Client, scheme: &str, port: u16, csrf: &st
 async fn find_api_endpoint(local_client: &reqwest::Client, info: &ProcessInfo) -> Option<(String, u16)> {
     // 1. First try ports the process is actually listening on (fastest)
     let pid_ports = get_listening_ports(info.pid).await;
-    append_debug_log(&format!("PID {} listening ports: {:?}", info.pid, pid_ports));
+    append_debug_log!("PID {} listening ports: {:?}", info.pid, pid_ports);
 
     // 2. Build candidate list: PID ports first, then extension_port range, then fallbacks
     let mut candidates = pid_ports.clone();
@@ -348,7 +351,7 @@ async fn find_api_endpoint(local_client: &reqwest::Client, info: &ProcessInfo) -
     // Deduplicate
     let mut seen = std::collections::HashSet::new();
     let ports: Vec<u16> = candidates.into_iter().filter(|p| seen.insert(*p)).collect();
-    append_debug_log(&format!("Probing ports: {:?}", ports));
+    append_debug_log!("Probing ports: {:?}", ports);
 
     let csrf = &info.csrf_token;
 
@@ -373,19 +376,19 @@ async fn find_api_endpoint(local_client: &reqwest::Client, info: &ProcessInfo) -
     // Run probes concurrently, returning early on the first successful one
     while let Some(res) = select_probes.next().await {
         if let Some(ep) = res {
-            append_debug_log(&format!("Found endpoint: {}://127.0.0.1:{}", ep.0, ep.1));
+            append_debug_log!("Found endpoint: {}://127.0.0.1:{}", ep.0, ep.1);
             return Some(ep);
         }
     }
 
-    append_debug_log("No working endpoint found");
+    append_debug_log!("No working endpoint found");
     None
 }
 
 // ─── Local language server quota fetch ───────────────────────────────────────
 
 async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Result<(Vec<super::config::QuotaPool>, String), String> {
-    append_debug_log("--- fetch_local_language_server_quota start ---");
+    append_debug_log!("--- fetch_local_language_server_quota start ---");
 
     let cached_opt = {
         let guard = get_endpoint_cache().lock().await;
@@ -393,9 +396,9 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
     };
 
     let (info, scheme, port) = if let Some(cached) = cached_opt {
-        append_debug_log(&format!("Probing cached endpoint: {}://127.0.0.1:{}", cached.scheme, cached.port));
+        append_debug_log!("Probing cached endpoint: {}://127.0.0.1:{}", cached.scheme, cached.port);
         if probe_port(local_client, &cached.scheme, cached.port, &cached.csrf_token).await {
-            append_debug_log("Cached endpoint probe succeeded!");
+            append_debug_log!("Cached endpoint probe succeeded!");
             let info = ProcessInfo {
                 csrf_token: cached.csrf_token.clone(),
                 extension_server_csrf_token: cached.extension_server_csrf_token.clone(),
@@ -404,7 +407,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
             };
             (info, cached.scheme, cached.port)
         } else {
-            append_debug_log("Cached endpoint probe failed, clearing cache and running full detect");
+            append_debug_log!("Cached endpoint probe failed, clearing cache and running full detect");
             {
                 let mut guard = get_endpoint_cache().lock().await;
                 *guard = None;
@@ -459,7 +462,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
     let mut retrieve_summary_success = false;
     let mut pools_result = Vec::new();
 
-    append_debug_log(&format!("Calling RetrieveUserQuotaSummary at {}", base_url));
+    append_debug_log!("Calling RetrieveUserQuotaSummary at {}", base_url);
 
     let res_summary = if let Some(ref ext_csrf) = info.extension_server_csrf_token {
         let r = local_client.post(&format!("{}/RetrieveUserQuotaSummary", base_url))
@@ -471,7 +474,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
         match r {
             Ok(resp) if resp.status().is_success() => Ok(resp),
             _ => {
-                append_debug_log("Extension CSRF failed for RetrieveUserQuotaSummary, retrying with main CSRF");
+                append_debug_log!("Extension CSRF failed for RetrieveUserQuotaSummary, retrying with main CSRF");
                 local_client.post(&format!("{}/RetrieveUserQuotaSummary", base_url))
                     .header("Connect-Protocol-Version", "1")
                     .header("X-Codeium-Csrf-Token", &info.csrf_token)
@@ -506,19 +509,19 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
                             }
                             if !pools_result.is_empty() {
                                 retrieve_summary_success = true;
-                                append_debug_log(&format!("Successfully parsed RetrieveUserQuotaSummary with {} pools", pools_result.len()));
+                                append_debug_log!("Successfully parsed RetrieveUserQuotaSummary with {} pools", pools_result.len());
                             }
                         }
                     }
                 } else {
-                    append_debug_log("Failed to parse RetrieveUserQuotaSummaryResponse json");
+                    append_debug_log!("Failed to parse RetrieveUserQuotaSummaryResponse json");
                 }
             }
         } else {
-            append_debug_log(&format!("RetrieveUserQuotaSummary returned non-200: {}", resp.status()));
+            append_debug_log!("RetrieveUserQuotaSummary returned non-200: {}", resp.status());
         }
     } else {
-        append_debug_log("RetrieveUserQuotaSummary request failed");
+        append_debug_log!("RetrieveUserQuotaSummary request failed");
     }
 
     if retrieve_summary_success {
@@ -526,7 +529,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
     }
 
     // Fallback: query GetUserStatus and merge manually
-    append_debug_log("Falling back to GetUserStatus with manual merging");
+    append_debug_log!("Falling back to GetUserStatus with manual merging");
     
     let res_status = if let Some(ref ext_csrf) = info.extension_server_csrf_token {
         let r = local_client.post(&format!("{}/GetUserStatus", base_url))
@@ -538,7 +541,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
         match r {
             Ok(resp) if resp.status().is_success() => Ok(resp),
             _ => {
-                append_debug_log("Extension CSRF failed or rejected, retrying with main CSRF");
+                append_debug_log!("Extension CSRF failed or rejected, retrying with main CSRF");
                 local_client.post(&format!("{}/GetUserStatus", base_url))
                     .header("Connect-Protocol-Version", "1")
                     .header("X-Codeium-Csrf-Token", &info.csrf_token)
@@ -554,7 +557,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
             .json(&meta)
             .send()
             .await
-    }.map_err(|e| { append_debug_log(&format!("Request error: {}", e)); format!("GetUserStatus request failed: {}", e) })?;
+    }.map_err(|e| { append_debug_log!("Request error: {}", e); format!("GetUserStatus request failed: {}", e) })?;
 
     let status = res_status.status();
     if !status.is_success() {
@@ -563,7 +566,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
 
     let body = res_status.text().await.map_err(|e| format!("Failed to read body: {}", e))?;
     let status_resp: UserStatusResponse = serde_json::from_str(&body)
-        .map_err(|e| { append_debug_log(&format!("JSON parse error: {}", e)); format!("Failed to parse response: {}", e) })?;
+        .map_err(|e| { append_debug_log!("JSON parse error: {}", e); format!("Failed to parse response: {}", e) })?;
 
     let configs = status_resp.user_status
         .and_then(|us| us.cascade_model_config_data)
@@ -736,7 +739,7 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
     // Priority 2: Direct local language server scraping
     match fetch_local_language_server_quota(local_client).await {
         Ok(result) => return Ok(result),
-        Err(e) => append_debug_log(&format!("Local scraper failed: {}", e)),
+        Err(e) => append_debug_log!("Local scraper failed: {}", e),
     }
 
     // Priority 3: Cloud OAuth fallback

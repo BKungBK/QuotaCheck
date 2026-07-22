@@ -26,6 +26,7 @@
 
   let statusMsg = $state("");
   let isSaving = $state(false);
+  let monitorCount = $state(1);
 
   onMount(async () => {
     try {
@@ -33,6 +34,12 @@
       config = loaded;
     } catch (e) {
       console.error("Failed to load config", e);
+    }
+    try {
+      const count = await invoke<number>("get_monitor_count");
+      monitorCount = Math.max(1, count);
+    } catch (e) {
+      console.error("Failed to load monitor count", e);
     }
   });
 
@@ -79,10 +86,11 @@
     <div class="form-group">
       <label for="monitor">Display Monitor Index</label>
       <select id="monitor" bind:value={config.monitor_index}>
-        <option value={0}>Monitor 0 (Primary)</option>
-        <option value={1}>Monitor 1 (Secondary)</option>
-        <option value={2}>Monitor 2</option>
-        <option value={3}>Monitor 3</option>
+        {#each Array(Math.max(monitorCount, config.monitor_index + 1)) as _, i}
+          <option value={i}>
+            Monitor {i} {i === 0 ? "(Primary)" : i === 1 ? "(Secondary)" : ""}
+          </option>
+        {/each}
       </select>
     </div>
 
