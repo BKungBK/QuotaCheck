@@ -30,41 +30,44 @@ struct TokenResponse {
 
 #[derive(Deserialize, Debug, Clone)]
 struct CloudQuotaInfo {
-    #[serde(rename = "remainingFraction")]
+    #[serde(default, rename = "remainingFraction")]
     remaining_fraction: Option<f64>,
-    #[serde(rename = "resetTime")]
+    #[serde(default, rename = "resetTime")]
     reset_time: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 struct CloudModelConfig {
-    #[serde(rename = "quotaInfo")]
+    #[serde(default, rename = "quotaInfo")]
     quota_info: Option<CloudQuotaInfo>,
-    #[serde(rename = "displayName")]
+    #[serde(default, rename = "displayName")]
     display_name: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 struct FetchAvailableModelsResponse {
+    #[serde(default)]
     models: std::collections::HashMap<String, CloudModelConfig>,
 }
 
 #[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 struct CockpitAccount {
+    #[serde(default)]
     email: Option<String>,
-    #[serde(rename = "refreshToken")]
+    #[serde(default, rename = "refreshToken")]
     refresh_token: Option<String>,
-    #[serde(rename = "accessToken")]
+    #[serde(default, rename = "accessToken")]
     access_token: Option<String>,
-    #[serde(rename = "expiresAt")]
+    #[serde(default, rename = "expiresAt")]
     expires_at: Option<String>,
-    #[serde(rename = "projectId")]
+    #[serde(default, rename = "projectId")]
     project_id: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 struct CockpitCredentials {
+    #[serde(default)]
     accounts: std::collections::HashMap<String, CockpitAccount>,
 }
 
@@ -109,34 +112,35 @@ struct ProcessInfo {
 
 #[derive(Deserialize, Debug, Clone)]
 struct QuotaInfo {
-    #[serde(rename = "remainingFraction")]
+    #[serde(default, rename = "remainingFraction")]
     remaining_fraction: Option<f64>,
-    #[serde(rename = "resetTime")]
+    #[serde(default, rename = "resetTime")]
     reset_time: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 struct ClientModelConfig {
+    #[serde(default)]
     label: String,
-    #[serde(rename = "quotaInfo")]
+    #[serde(default, rename = "quotaInfo")]
     quota_info: Option<QuotaInfo>,
 }
 
 #[derive(Deserialize, Debug)]
 struct CascadeModelConfigData {
-    #[serde(rename = "clientModelConfigs")]
+    #[serde(default, rename = "clientModelConfigs")]
     client_model_configs: Vec<ClientModelConfig>,
 }
 
 #[derive(Deserialize, Debug)]
 struct UserStatusDetail {
-    #[serde(rename = "cascadeModelConfigData")]
+    #[serde(default, rename = "cascadeModelConfigData")]
     cascade_model_config_data: Option<CascadeModelConfigData>,
 }
 
 #[derive(Deserialize, Debug)]
 struct UserStatusResponse {
-    #[serde(rename = "userStatus")]
+    #[serde(default, rename = "userStatus")]
     user_status: Option<UserStatusDetail>,
 }
 

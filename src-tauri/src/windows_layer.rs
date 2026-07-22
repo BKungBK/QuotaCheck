@@ -124,8 +124,8 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
 
         let dpi = GetDpiForWindow(tauri_hwnd);
         let scale_factor = dpi as f64 / 96.0;
-        let widget_w = (150.0 * scale_factor) as i32;
-        let widget_h = (110.0 * scale_factor) as i32;
+        let widget_w = (300.0 * scale_factor) as i32;
+        let widget_h = (200.0 * scale_factor) as i32;
         let offset_x = (config.offset_x as f64 * scale_factor) as i32;
         let offset_y = (config.offset_y as f64 * scale_factor) as i32;
 
