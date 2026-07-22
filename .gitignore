@@ -10,4 +10,5 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 debug_log.txt
 /src-tauri/target
-
+/src-tauri/target_temp
+.impeccable

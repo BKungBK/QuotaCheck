@@ -41,6 +41,8 @@ pub struct Cache {
     pub pools: Vec<QuotaPool>,
     pub last_updated: String,
     pub is_offline: bool,
+    #[serde(default)]
+    pub error_reason: Option<String>,
     pub source: String,
 }
 
@@ -50,6 +52,7 @@ impl Default for Cache {
             pools: Vec::new(),
             last_updated: String::new(),
             is_offline: true,
+            error_reason: None,
             source: String::new(),
         }
     }

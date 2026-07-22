@@ -24,7 +24,24 @@ fn get_current_quota(state: State<'_, AppState>) -> config::Cache {
 }
 
 #[tauri::command]
-async fn manual_refresh_trigger(state: State<'_, AppState>) -> Result<(), String> {
+fn get_config() -> config::Config {
+    config::load_config()
+}
+
+#[tauri::command]
+async fn save_config(app_handle: AppHandle, new_config: config::Config) -> Result<(), String> {
+    config::save_config(&new_config).map_err(|e| e.to_string())?;
+    let _ = toggle_autostart(new_config.autostart);
+    if let Some(window) = app_handle.get_webview_window("main") {
+        windows_layer::setup_with_retry(&window).await;
+    }
+    let _ = app_handle.emit("config-updated", new_config);
+    Ok(())
+}
+
+#[tauri::command]
+async fn manual_refresh_trigger(app_handle: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let _ = app_handle.emit("refresh-started", ());
     let _ = state.refresh_trigger.send(()).await;
     Ok(())
 }
@@ -54,6 +71,50 @@ fn is_near_reset(reset_time_str: &str) -> bool {
     false
 }
 
+struct LoopbackCache {
+    result: bool,
+    last_check: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+fn get_loopback_cache() -> &'static Mutex<LoopbackCache> {
+    static CACHE: std::sync::OnceLock<Mutex<LoopbackCache>> = std::sync::OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(LoopbackCache {
+        result: false,
+        last_check: None,
+    }))
+}
+
+async fn check_has_loopback(client: &reqwest::Client) -> bool {
+    let now = chrono::Utc::now();
+    {
+        if let Ok(cache) = get_loopback_cache().lock() {
+            if let Some(last) = cache.last_check {
+                if (now - last).num_seconds() < 300 {
+                    return cache.result;
+                }
+            }
+        }
+    }
+
+    let loopback_client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(500))
+        .build()
+        .unwrap_or_else(|_| client.clone());
+
+    let result = loopback_client
+        .get("http://localhost:8999/quota")
+        .send()
+        .await
+        .is_ok();
+
+    if let Ok(mut cache) = get_loopback_cache().lock() {
+        cache.result = result;
+        cache.last_check = Some(now);
+    }
+
+    result
+}
+
 async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx: mpsc::Receiver<()>) {
     let mut heavy_usage_until: Option<chrono::DateTime<chrono::Utc>> = None;
 
@@ -65,11 +126,17 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
             Ok((pools, src)) => {
                 new_cache.pools = pools;
                 new_cache.is_offline = false;
+                new_cache.error_reason = None;
                 new_cache.source = src;
                 new_cache.last_updated = chrono::Utc::now().to_rfc3339();
             }
-            Err(_) => {
+            Err(err) => {
                 new_cache.is_offline = true;
+                if err.contains("not detected") || err.contains("not found") {
+                    new_cache.error_reason = Some("process_not_found".to_string());
+                } else {
+                    new_cache.error_reason = Some("offline".to_string());
+                }
                 new_cache.source = String::new();
             }
         }
@@ -82,11 +149,7 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
 
         let _ = app_handle.emit("quota-update", new_cache);
 
-        let has_loopback = state.client
-            .get("http://localhost:8999/quota")
-            .send()
-            .await
-            .is_ok();
+        let has_loopback = check_has_loopback(&state.client).await;
 
         let near_reset = is_near_reset(&config.reset_time_utc);
         let now = chrono::Utc::now();
@@ -162,9 +225,6 @@ fn toggle_autostart(enable: bool) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Declare Per-Monitor DPI awareness before any Win32 API calls.
-    // Without this, Windows silently virtualizes coordinates in GetMonitorInfoW
-    // and SetWindowPos, causing the widget to render at wrong physical positions.
     #[cfg(target_os = "windows")]
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -197,10 +257,11 @@ pub fn run() {
         .manage(app_state)
         .setup(move |app| {
             if let Some(window) = app.get_webview_window("main") {
-                let _ = windows_layer::setup_wallpaper_widget(&window);
+                windows_layer::init_wallpaper_widget(window);
             }
 
             let refresh = MenuItem::with_id(app, "refresh", "Refresh Now", true, None::<&str>).unwrap();
+            let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>).unwrap();
             
             let cfg = config::load_config();
             let _ = toggle_autostart(cfg.autostart);
@@ -215,7 +276,7 @@ pub fn run() {
             
             let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>).unwrap();
 
-            let menu = Menu::with_items(app, &[&refresh, &autostart, &exit]).unwrap();
+            let menu = Menu::with_items(app, &[&refresh, &settings, &autostart, &exit]).unwrap();
             let refresh_tx = state_clone.refresh_trigger.clone();
 
             let _tray = TrayIconBuilder::new()
@@ -224,10 +285,27 @@ pub fn run() {
                 .on_menu_event(move |app_handle, event| {
                     match event.id.as_ref() {
                         "refresh" => {
+                            let _ = app_handle.emit("refresh-started", ());
                             let tx = refresh_tx.clone();
                             tauri::async_runtime::spawn(async move {
                                 let _ = tx.send(()).await;
                             });
+                        }
+                        "settings" => {
+                            if let Some(window) = app_handle.get_webview_window("settings") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            } else {
+                                let _ = tauri::WebviewWindowBuilder::new(
+                                    app_handle,
+                                    "settings",
+                                    tauri::WebviewUrl::App("/settings".into()),
+                                )
+                                .title("QuotaCheck Settings")
+                                .inner_size(360.0, 520.0)
+                                .resizable(false)
+                                .build();
+                            }
                         }
                         "autostart" => {
                             let mut config = config::load_config();
@@ -257,7 +335,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_current_quota, manual_refresh_trigger])
+        .invoke_handler(tauri::generate_handler![get_current_quota, get_config, save_config, manual_refresh_trigger])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

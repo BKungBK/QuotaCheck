@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import { flip } from "svelte/animate";
 
   interface QuotaPool {
     label: string;
@@ -13,11 +14,13 @@
     pools: QuotaPool[];
     last_updated: string;
     is_offline: boolean;
+    error_reason?: string;
     source: string;
   }
 
   let pools = $state<QuotaPool[]>([]);
   let isOffline = $state(true);
+  let errorReason = $state<string | undefined>(undefined);
   let lastUpdated = $state("");
   let source = $state("");
   let isLoading = $state(true);
@@ -30,6 +33,33 @@
     return () => clearInterval(interval);
   });
 
+  // Watchdog: detect if data is stale (older than 10 minutes)
+  let isStale = $derived.by(() => {
+    if (!lastUpdated) return false;
+    const diffSecs = Math.floor((now - new Date(lastUpdated).getTime()) / 1000);
+    return diffSecs > 600;
+  });
+
+  let statusLabel = $derived.by(() => {
+    if (isLoading) return "loading...";
+    if (isOffline) {
+      if (errorReason === "process_not_found") return "process not found";
+      return "offline";
+    }
+    if (isStale) return "stale";
+    return "live";
+  });
+
+  let statusTooltip = $derived.by(() => {
+    if (isLoading) return "Fetching latest quota data...";
+    if (isOffline) {
+      if (errorReason === "process_not_found") return "Antigravity IDE or CLI process is not running";
+      return "Unable to connect to local quota endpoint";
+    }
+    if (isStale) return "Quota data has not updated in over 10 minutes";
+    return "Connected to quota service";
+  });
+
   let timeAgo = $derived.by(() => {
     if (!lastUpdated) return "Never";
     const diffSecs = Math.floor((now - new Date(lastUpdated).getTime()) / 1000);
@@ -40,13 +70,15 @@
   });
 
   onMount(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenQuota: (() => void) | undefined;
+    let unlistenRefresh: (() => void) | undefined;
 
     const init = async () => {
       try {
         const cache = await invoke<Cache>("get_current_quota");
         pools = cache.pools || [];
         isOffline = cache.is_offline;
+        errorReason = cache.error_reason;
         lastUpdated = cache.last_updated;
         source = cache.source;
       } catch (e) {
@@ -55,37 +87,34 @@
         isLoading = false;
       }
 
-      unlisten = await listen<Cache>("quota-update", (event) => {
+      unlistenQuota = await listen<Cache>("quota-update", (event) => {
         pools = event.payload.pools || [];
         isOffline = event.payload.is_offline;
+        errorReason = event.payload.error_reason;
         lastUpdated = event.payload.last_updated;
         source = event.payload.source;
         isLoading = false;
+      });
+
+      unlistenRefresh = await listen("refresh-started", () => {
+        isLoading = true;
       });
     };
 
     init();
 
     return () => {
-      if (unlisten) unlisten();
+      if (unlistenQuota) unlistenQuota();
+      if (unlistenRefresh) unlistenRefresh();
     };
   });
 
-  /**
-   * Returns the bar fill color for a given pool fraction.
-   * Uses the design-system Active Blue when online; desaturates to gray when offline.
-   * Color degrades toward warning amber below 20% remaining.
-   */
   function barColor(fraction: number): string {
     if (isOffline) return "var(--color-bar-offline)";
     if (fraction <= 0.2) return "var(--color-bar-low)";
     return "var(--color-accent)";
   }
 
-  /**
-   * Convert an ISO reset_time string to a compact countdown: "2h 41m"
-   * If the countdown has expired (<= 0), return empty string.
-   */
   function formatResetTime(raw: string | null): string {
     if (!raw) return "";
     const d = new Date(raw);
@@ -102,7 +131,6 @@
     return raw;
   }
 
-  /** Helper to get simulated fraction label */
   function getFractionText(label: string, fraction: number): string {
     const l = label.toLowerCase();
     if (l.startsWith("claude")) {
@@ -129,14 +157,15 @@
 >
   <div class="row-top">
     <span class="label" id="widget-title" aria-hidden="true">BK</span>
-    <div class="live-badge" role="status" aria-live="polite" id="widget-status">
+    <div class="live-badge" role="status" aria-live="polite" id="widget-status" title={statusTooltip}>
       <span
         class="dot"
-        class:dot-live={!isOffline}
+        class:dot-live={!isOffline && !isStale}
+        class:dot-stale={isStale}
         id="widget-status-dot"
         aria-hidden="true"
       ></span>
-      {isOffline ? "offline" : "live"}
+      {statusLabel}
     </div>
   </div>
 
@@ -171,7 +200,7 @@
       {#each pools as pool (pool.label)}
         {@const pct = Math.min(100, Math.round(pool.remaining_fraction * 100))}
         {@const resetText = formatResetTime(pool.reset_time)}
-        <div class="pool-row" id="pool-{pool.label.toLowerCase()}">
+        <div class="pool-row" id="pool-{pool.label.toLowerCase()}" animate:flip={{ duration: 300 }}>
           <div class="pool-meta">
             <span class="pool-label">{pool.label}</span>
             <span class="pool-percent">{pct}%</span>
@@ -192,7 +221,9 @@
         </div>
       {:else}
         <div class="no-pools" id="no-pools-placeholder">
-          <span class="placeholder-text">{isOffline ? "Offline" : "No Pools"}</span>
+          <span class="placeholder-text" title={statusTooltip}>
+            {errorReason === "process_not_found" ? "Process Not Found" : isOffline ? "Offline" : "No Pools"}
+          </span>
         </div>
       {/each}
     {/if}
@@ -208,7 +239,7 @@
   /* ── Design Tokens ── */
   :root {
     /* Surfaces */
-    --color-bg:         oklch(15% 0 0 / 0.65);   /* transparent natural gray */
+    --color-bg:         oklch(15% 0 0 / 0.65);
     --color-surface:    oklch(20% 0 0 / 0.8);
     --color-border:     oklch(25% 0 0 / 0.4);
     --color-separator:  oklch(20% 0 0 / 0.4);
@@ -217,8 +248,8 @@
     --color-shimmer-base:     oklch(18% 0 0 / 0.5);
     --color-shimmer-highlight: oklch(25% 0 0 / 0.5);
 
-    /* Ink scale — all verified ≥4.5:1 on --color-bg */
-    --color-ink:        oklch(85% 0 0);   /* natural gray text */
+    /* Ink scale */
+    --color-ink:        oklch(85% 0 0);
     --color-ink-high:   oklch(90% 0 0);   
     --color-ink-mid:    oklch(65% 0 0);   
     --color-ink-muted:  oklch(55% 0 0);   
@@ -227,8 +258,9 @@
 
     /* Status dot */
     --color-dot-offline: oklch(42% 0 0);
+    --color-dot-stale:   oklch(65% 0.15 80);
 
-    /* Accent — now natural gray */
+    /* Accent */
     --color-accent:      oklch(48% 0 0);
     --color-accent-glow: oklch(48% 0 0 / 0.5);
 
@@ -237,12 +269,11 @@
     --color-bar-offline: oklch(36% 0 0);
     --color-bar-low:     oklch(42% 0 0);
 
-    /* Live dot color — natural gray pulse (or soft white) */
+    /* Live dot color */
     --color-dot-live:    oklch(75% 0 0);
     --color-dot-live-glow: oklch(75% 0 0 / 0.4);
   }
 
-  /* ── Reset ── */
   :global(html, body) {
     margin: 0;
     padding: 0;
@@ -250,7 +281,6 @@
     overflow: hidden;
   }
 
-  /* ── Keyframes ── */
   @keyframes pulseDot {
     0%, 100% { opacity: 1;   box-shadow: 0 0 0 0   var(--color-dot-live-glow); }
     50%       { opacity: 0.8; box-shadow: 0 0 0 3px oklch(68% 0.17 160 / 0); }
@@ -260,17 +290,10 @@
     100% { background-position:  200% 0; }
   }
 
-  /* ── Reduced motion ── */
   @media (prefers-reduced-motion: reduce) {
-    .widget {
-      transition: none;
-    }
-    .dot-live {
-      animation: none;
-    }
-    .bar-fill {
-      transition: none;
-    }
+    .widget { transition: none; }
+    .dot-live { animation: none; }
+    .bar-fill { transition: none; }
     .skeleton .skeleton-text,
     .skeleton .skeleton-bar {
       animation: none;
@@ -278,7 +301,6 @@
     }
   }
 
-  /* ── Widget card ── */
   .widget {
     width: 100vw;
     height: 100vh;
@@ -301,7 +323,6 @@
     filter: grayscale(1);
   }
 
-  /* ── Header row ── */
   .row-top {
     display: flex;
     align-items: center;
@@ -317,7 +338,6 @@
     line-height: 1;
   }
 
-  /* ── Live badge ── */
   .live-badge {
     display: flex;
     align-items: center;
@@ -326,6 +346,7 @@
     font-weight: 500;
     letter-spacing: 0.04em;
     color: var(--color-ink-mid);
+    cursor: help;
   }
   .dot {
     width: 5px;
@@ -340,8 +361,10 @@
     background: var(--color-dot-live);
     animation: pulseDot 2.4s ease-in-out infinite;
   }
+  .dot-stale {
+    background: var(--color-dot-stale);
+  }
 
-  /* ── Pools ── */
   .pools-container {
     display: flex;
     flex-direction: column;
@@ -355,6 +378,7 @@
     flex-direction: column;
     gap: 4px;
     padding: 8px 0;
+    transition: transform 300ms ease;
   }
   .pool-row + .pool-row {
     border-top: 1px solid var(--color-separator);
@@ -382,7 +406,6 @@
     flex-shrink: 0;
   }
 
-  /* ── Progress track ── */
   .bar-track {
     width: 100%;
     height: 5px;
@@ -397,7 +420,6 @@
     transition: width 400ms ease, background 600ms ease;
   }
 
-  /* ── Sub meta (reset time & fractions) ── */
   .sub-row {
     display: flex;
     justify-content: space-between;
@@ -409,7 +431,6 @@
     letter-spacing: 0.02em;
   }
 
-  /* ── Skeleton Shimmer Effect ── */
   .skeleton .skeleton-text {
     height: 10px;
     background: linear-gradient(
@@ -441,7 +462,6 @@
     animation: shimmer 1.4s linear infinite;
   }
 
-  /* ── No pools placeholder ── */
   .no-pools {
     display: flex;
     align-items: center;
@@ -456,7 +476,6 @@
     letter-spacing: 0.06em;
   }
 
-  /* ── Footer ── */
   .row-bottom {
     display: flex;
     justify-content: space-between;

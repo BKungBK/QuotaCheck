@@ -163,18 +163,29 @@ struct BackendQuotaPool {
 // ─── Debug logging helper ────────────────────────────────────────────────────
 
 fn append_debug_log(msg: &str) {
+    if !cfg!(debug_assertions) { return; }
     use std::fs::OpenOptions;
     use std::io::Write;
-    use std::thread::sleep;
-    use std::time::Duration;
     let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
-    for _ in 0..10 {
-        if let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&log_path) {
-            let _ = writeln!(f, "{}", msg);
-            return;
-        }
-        sleep(Duration::from_millis(10));
+    if let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&log_path) {
+        let _ = writeln!(f, "{}", msg);
     }
+}
+
+// ─── Endpoint cache ─────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug)]
+struct CachedEndpoint {
+    pid: u32,
+    scheme: String,
+    port: u16,
+    csrf_token: String,
+    extension_server_csrf_token: Option<String>,
+}
+
+fn get_endpoint_cache() -> &'static Mutex<Option<CachedEndpoint>> {
+    static CACHE: OnceLock<Mutex<Option<CachedEndpoint>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(None))
 }
 
 // ─── Process detection ───────────────────────────────────────────────────────
@@ -211,8 +222,10 @@ async fn detect_antigravity_process() -> Option<ProcessInfo> {
     }
 
     // Reset debug log with WMI results
-    let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
-    let _ = fs::write(&log_path, format!("WMI result:\n{}\n", json_str));
+    if cfg!(debug_assertions) {
+        let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
+        let _ = fs::write(&log_path, format!("WMI result:\n{}\n", json_str));
+    }
 
     let processes: Vec<WmiProcess> = if json_str.starts_with('[') {
         serde_json::from_str(json_str).ok()?
@@ -374,11 +387,63 @@ async fn find_api_endpoint(local_client: &reqwest::Client, info: &ProcessInfo) -
 async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Result<(Vec<super::config::QuotaPool>, String), String> {
     append_debug_log("--- fetch_local_language_server_quota start ---");
 
-    let info = detect_antigravity_process().await
-        .ok_or_else(|| "Antigravity process not detected".to_string())?;
+    let cached_opt = {
+        let guard = get_endpoint_cache().lock().await;
+        guard.clone()
+    };
 
-    let (scheme, port) = find_api_endpoint(local_client, &info).await
-        .ok_or_else(|| "Could not find Antigravity local API port".to_string())?;
+    let (info, scheme, port) = if let Some(cached) = cached_opt {
+        append_debug_log(&format!("Probing cached endpoint: {}://127.0.0.1:{}", cached.scheme, cached.port));
+        if probe_port(local_client, &cached.scheme, cached.port, &cached.csrf_token).await {
+            append_debug_log("Cached endpoint probe succeeded!");
+            let info = ProcessInfo {
+                csrf_token: cached.csrf_token.clone(),
+                extension_server_csrf_token: cached.extension_server_csrf_token.clone(),
+                extension_port: cached.port,
+                pid: cached.pid,
+            };
+            (info, cached.scheme, cached.port)
+        } else {
+            append_debug_log("Cached endpoint probe failed, clearing cache and running full detect");
+            {
+                let mut guard = get_endpoint_cache().lock().await;
+                *guard = None;
+            }
+            let info = detect_antigravity_process().await
+                .ok_or_else(|| "Antigravity process not detected".to_string())?;
+            let (scheme, port) = find_api_endpoint(local_client, &info).await
+                .ok_or_else(|| "Could not find Antigravity local API port".to_string())?;
+            
+            {
+                let mut guard = get_endpoint_cache().lock().await;
+                *guard = Some(CachedEndpoint {
+                    pid: info.pid,
+                    scheme: scheme.clone(),
+                    port,
+                    csrf_token: info.csrf_token.clone(),
+                    extension_server_csrf_token: info.extension_server_csrf_token.clone(),
+                });
+            }
+            (info, scheme, port)
+        }
+    } else {
+        let info = detect_antigravity_process().await
+            .ok_or_else(|| "Antigravity process not detected".to_string())?;
+        let (scheme, port) = find_api_endpoint(local_client, &info).await
+            .ok_or_else(|| "Could not find Antigravity local API port".to_string())?;
+
+        {
+            let mut guard = get_endpoint_cache().lock().await;
+            *guard = Some(CachedEndpoint {
+                pid: info.pid,
+                scheme: scheme.clone(),
+                port,
+                csrf_token: info.csrf_token.clone(),
+                extension_server_csrf_token: info.extension_server_csrf_token.clone(),
+            });
+        }
+        (info, scheme, port)
+    };
 
     let base_url = format!("{}://127.0.0.1:{}/exa.language_server_pb.LanguageServerService", scheme, port);
 
