@@ -24,7 +24,7 @@ fn get_monitor_count() -> usize {
 }
 
 #[tauri::command]
-fn get_current_quota(state: State<'_, AppState>) -> config::Cache {
+fn get_current_quota(state: State<'_, Arc<AppState>>) -> config::Cache {
     state.cache.lock().unwrap().clone()
 }
 
@@ -39,7 +39,7 @@ async fn trigger_refresh_internal(app_handle: &AppHandle, state: &AppState) {
 }
 
 #[tauri::command]
-async fn save_config(app_handle: AppHandle, state: State<'_, AppState>, new_config: config::Config) -> Result<(), String> {
+async fn save_config(app_handle: AppHandle, state: State<'_, Arc<AppState>>, new_config: config::Config) -> Result<(), String> {
     config::save_config(&new_config).map_err(|e| e.to_string())?;
     let _ = toggle_autostart(new_config.autostart);
     if let Some(window) = app_handle.get_webview_window("main") {
@@ -51,7 +51,7 @@ async fn save_config(app_handle: AppHandle, state: State<'_, AppState>, new_conf
 }
 
 #[tauri::command]
-async fn manual_refresh_trigger(app_handle: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+async fn manual_refresh_trigger(app_handle: AppHandle, state: State<'_, Arc<AppState>>) -> Result<(), String> {
     trigger_refresh_internal(&app_handle, &state).await;
     Ok(())
 }

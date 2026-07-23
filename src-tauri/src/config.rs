@@ -2,6 +2,14 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+fn default_quota_source_mode() -> String {
+    "auto".to_string()
+}
+
+fn default_display_mode() -> String {
+    "summary".to_string()
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     pub refresh_token_override: String,
@@ -16,6 +24,10 @@ pub struct Config {
     pub preferred_account: String,
     #[serde(default)]
     pub mask_account_email: bool,
+    #[serde(default = "default_quota_source_mode")]
+    pub quota_source_mode: String, // "auto", "local", "cloud"
+    #[serde(default = "default_display_mode")]
+    pub display_mode: String, // "summary", "detailed"
 }
 
 impl Default for Config {
@@ -31,6 +43,8 @@ impl Default for Config {
             autostart: true,
             preferred_account: String::new(),
             mask_account_email: false,
+            quota_source_mode: "auto".to_string(),
+            display_mode: "summary".to_string(),
         }
     }
 }

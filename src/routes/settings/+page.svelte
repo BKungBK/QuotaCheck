@@ -13,6 +13,8 @@
     autostart: boolean;
     preferred_account: string;
     mask_account_email: boolean;
+    quota_source_mode: string;
+    display_mode?: string;
   }
 
   let config = $state<Config>({
@@ -26,6 +28,8 @@
     autostart: true,
     preferred_account: "",
     mask_account_email: false,
+    quota_source_mode: "auto",
+    display_mode: "summary",
   });
 
   let statusMsg = $state("");
@@ -101,6 +105,23 @@
     <div class="form-group">
       <label for="reset_time">Daily Reset Time (UTC)</label>
       <input id="reset_time" type="text" bind:value={config.reset_time_utc} placeholder="00:00" />
+    </div>
+
+    <div class="form-group">
+      <label for="quota_source_mode">Quota Source Mode</label>
+      <select id="quota_source_mode" bind:value={config.quota_source_mode}>
+        <option value="auto">Auto (Local First → Cloud Fallback)</option>
+        <option value="local">Local Language Server Only</option>
+        <option value="cloud">Cloud OAuth API Only</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="display_mode">Display Mode</label>
+      <select id="display_mode" bind:value={config.display_mode}>
+        <option value="summary">Summary (Gemini & Claude Merged)</option>
+        <option value="detailed">Detailed (All Individual Models)</option>
+      </select>
     </div>
 
     <div class="form-group">

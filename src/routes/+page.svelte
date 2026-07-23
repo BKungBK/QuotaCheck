@@ -248,7 +248,7 @@
 
   <div class="row-bottom">
     <span class="meta" id="quota-source">
-      {isOffline ? "Offline" : source === "local" ? "Local" : accountEmail ? `Cloud • ${formatEmail(accountEmail, maskAccountEmail)}` : "Cloud"}
+      {isOffline ? "Offline" : source === "local" ? "Local 🟢" : accountEmail ? `Cloud ☁️ • ${formatEmail(accountEmail, maskAccountEmail)}` : "Cloud ☁️"}
     </span>
     <span class="meta" id="quota-time-ago">{timeAgo}</span>
   </div>
@@ -389,14 +389,24 @@
     flex-direction: column;
     gap: 0;
     flex-grow: 1;
-    justify-content: center;
+    justify-content: flex-start;
     margin: 6px 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ink-dim) transparent;
+  }
+  .pools-container::-webkit-scrollbar {
+    width: 3px;
+  }
+  .pools-container::-webkit-scrollbar-thumb {
+    background: var(--color-ink-dim);
+    border-radius: 3px;
   }
   .pool-row {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 8px 0;
+    gap: 3px;
+    padding: 6px 0;
     transition: transform 300ms ease;
   }
   .pool-row + .pool-row {

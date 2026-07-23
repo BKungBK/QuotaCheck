@@ -28,51 +28,43 @@ struct TokenResponse {
     access_token: String,
 }
 
-#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 struct CloudQuotaInfo {
-    #[serde(default, rename = "remainingFraction")]
+    #[serde(rename = "remainingFraction")]
     remaining_fraction: Option<f64>,
-    #[serde(default, rename = "resetTime")]
+    #[serde(rename = "resetTime")]
     reset_time: Option<String>,
 }
 
-#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct CloudModelConfig {
-    #[serde(default, rename = "quotaInfo")]
+    #[serde(rename = "quotaInfo")]
     quota_info: Option<CloudQuotaInfo>,
-    #[serde(default, rename = "displayName")]
+    #[serde(rename = "displayName")]
     display_name: Option<String>,
-    #[serde(default, rename = "isInternal")]
-    is_internal: Option<bool>,
 }
 
-#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct FetchAvailableModelsResponse {
-    #[serde(default)]
     models: std::collections::HashMap<String, CloudModelConfig>,
 }
 
 #[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 struct CockpitAccount {
-    #[serde(default)]
     email: Option<String>,
-    #[serde(default, rename = "refreshToken")]
+    #[serde(rename = "refreshToken")]
     refresh_token: Option<String>,
-    #[serde(default, rename = "accessToken")]
+    #[serde(rename = "accessToken")]
     access_token: Option<String>,
-    #[serde(default, rename = "expiresAt")]
+    #[serde(rename = "expiresAt")]
     expires_at: Option<String>,
-    #[serde(default, rename = "projectId")]
+    #[serde(rename = "projectId")]
     project_id: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 struct CockpitCredentials {
-    #[serde(default)]
     accounts: std::collections::HashMap<String, CockpitAccount>,
 }
 
@@ -84,7 +76,6 @@ struct CloudCache {
     access_token: Option<String>,
     expires_at: Option<DateTime<Utc>>,
     project_id: Option<String>,
-    cached_email: Option<String>,
 }
 
 fn get_cloud_cache() -> &'static Mutex<CloudCache> {
@@ -93,7 +84,6 @@ fn get_cloud_cache() -> &'static Mutex<CloudCache> {
         access_token: None,
         expires_at: None,
         project_id: None,
-        cached_email: None,
     }))
 }
 
@@ -119,65 +109,65 @@ struct ProcessInfo {
 
 #[derive(Deserialize, Debug, Clone)]
 struct QuotaInfo {
-    #[serde(default, rename = "remainingFraction")]
+    #[serde(rename = "remainingFraction")]
     remaining_fraction: Option<f64>,
-    #[serde(default, rename = "resetTime")]
+    #[serde(rename = "resetTime")]
     reset_time: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 struct ClientModelConfig {
-    #[serde(default)]
     label: String,
-    #[serde(default, rename = "quotaInfo")]
+    #[serde(rename = "quotaInfo")]
     quota_info: Option<QuotaInfo>,
 }
 
 #[derive(Deserialize, Debug)]
 struct CascadeModelConfigData {
-    #[serde(default, rename = "clientModelConfigs")]
+    #[serde(rename = "clientModelConfigs")]
     client_model_configs: Vec<ClientModelConfig>,
 }
 
 #[derive(Deserialize, Debug)]
 struct UserStatusDetail {
-    #[serde(default, rename = "cascadeModelConfigData")]
+    #[serde(rename = "cascadeModelConfigData")]
     cascade_model_config_data: Option<CascadeModelConfigData>,
 }
 
 #[derive(Deserialize, Debug)]
 struct UserStatusResponse {
-    #[serde(default, rename = "userStatus")]
+    #[serde(rename = "userStatus")]
     user_status: Option<UserStatusDetail>,
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize, Debug, Clone)]
-struct QuotaBucket {
-    #[serde(default, rename = "bucketId")]
-    bucket_id: Option<String>,
-    #[serde(default, rename = "displayName")]
-    display_name: Option<String>,
-    #[serde(default, rename = "remainingFraction")]
-    remaining_fraction: Option<f64>,
-    #[serde(default, rename = "resetTime")]
-    reset_time: Option<String>,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-struct QuotaGroup {
-    #[serde(default, rename = "displayName")]
-    display_name: Option<String>,
-    #[serde(default)]
-    buckets: Vec<QuotaBucket>,
 }
 
 #[derive(Deserialize, Debug, Default)]
 struct RetrieveUserQuotaSummaryResponse {
     #[serde(default)]
-    pools: Option<Vec<BackendQuotaPool>>,
+    groups: Option<Vec<BackendQuotaGroup>>,
     #[serde(default)]
-    groups: Option<Vec<QuotaGroup>>,
+    pools: Option<Vec<BackendQuotaPool>>,
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+struct BackendQuotaGroup {
+    #[serde(default, rename = "displayName")]
+    display_name: Option<String>,
+    #[serde(default)]
+    buckets: Vec<BackendQuotaBucket>,
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+struct BackendQuotaBucket {
+    #[serde(default, rename = "bucketId")]
+    bucket_id: Option<String>,
+    #[serde(default, rename = "displayName")]
+    display_name: Option<String>,
+    #[serde(default)]
+    window: Option<String>,
+    #[serde(default, rename = "remainingFraction")]
+    remaining_fraction: Option<f64>,
+    #[serde(default, rename = "resetTime")]
+    reset_time: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -190,35 +180,21 @@ struct BackendQuotaPool {
     reset_time: Option<String>,
 }
 
-// ─── Debug logging macro ────────────────────────────────────────────────────
+// ─── Debug logging helper ────────────────────────────────────────────────────
 
-macro_rules! append_debug_log {
-    ($($arg:tt)*) => {
-        if cfg!(debug_assertions) {
-            use std::fs::OpenOptions;
-            use std::io::Write;
-            let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
-            if let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&log_path) {
-                let _ = writeln!(f, $($arg)*);
-            }
+fn append_debug_log(msg: &str) {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    use std::thread::sleep;
+    use std::time::Duration;
+    let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
+    for _ in 0..10 {
+        if let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&log_path) {
+            let _ = writeln!(f, "{}", msg);
+            return;
         }
-    };
-}
-
-// ─── Endpoint cache ─────────────────────────────────────────────────────────
-
-#[derive(Clone, Debug)]
-struct CachedEndpoint {
-    pid: u32,
-    scheme: String,
-    port: u16,
-    csrf_token: String,
-    extension_server_csrf_token: Option<String>,
-}
-
-fn get_endpoint_cache() -> &'static Mutex<Option<CachedEndpoint>> {
-    static CACHE: OnceLock<Mutex<Option<CachedEndpoint>>> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(None))
+        sleep(Duration::from_millis(10));
+    }
 }
 
 // ─── Process detection ───────────────────────────────────────────────────────
@@ -243,22 +219,20 @@ async fn detect_antigravity_process() -> Option<ProcessInfo> {
     let output = cmd.output().await.ok()?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        append_debug_log!("WMI query failed: {}", stderr);
+        append_debug_log(&format!("WMI query failed: {}", stderr));
         return None;
     }
 
     let json_str = String::from_utf8_lossy(&output.stdout);
     let json_str = json_str.trim();
     if json_str.is_empty() {
-        append_debug_log!("WMI: no processes found");
+        append_debug_log("WMI: no processes found");
         return None;
     }
 
     // Reset debug log with WMI results
-    if cfg!(debug_assertions) {
-        let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
-        let _ = fs::write(&log_path, format!("WMI result:\n{}\n", json_str));
-    }
+    let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
+    let _ = fs::write(&log_path, format!("WMI result:\n{}\n", json_str));
 
     let processes: Vec<WmiProcess> = if json_str.starts_with('[') {
         serde_json::from_str(json_str).ok()?
@@ -289,10 +263,10 @@ async fn detect_antigravity_process() -> Option<ProcessInfo> {
                 .and_then(|p| p.parse::<u16>().ok())
                 .unwrap_or(0);
 
-            append_debug_log!(
+            append_debug_log(&format!(
                 "Detected: PID={}, name={}, csrf={:.8}…, ext_port={}",
                 proc.process_id, proc.name, csrf_token, extension_port
-            );
+            ));
 
             return Some(ProcessInfo {
                 csrf_token,
@@ -303,7 +277,7 @@ async fn detect_antigravity_process() -> Option<ProcessInfo> {
         }
     }
 
-    append_debug_log!("No matching Antigravity process found");
+    append_debug_log("No matching Antigravity process found");
     None
 }
 
@@ -367,7 +341,7 @@ async fn probe_port(client: &reqwest::Client, scheme: &str, port: u16, csrf: &st
 async fn find_api_endpoint(local_client: &reqwest::Client, info: &ProcessInfo) -> Option<(String, u16)> {
     // 1. First try ports the process is actually listening on (fastest)
     let pid_ports = get_listening_ports(info.pid).await;
-    append_debug_log!("PID {} listening ports: {:?}", info.pid, pid_ports);
+    append_debug_log(&format!("PID {} listening ports: {:?}", info.pid, pid_ports));
 
     // 2. Build candidate list: PID ports first, then extension_port range, then fallbacks
     let mut candidates = pid_ports.clone();
@@ -381,7 +355,7 @@ async fn find_api_endpoint(local_client: &reqwest::Client, info: &ProcessInfo) -
     // Deduplicate
     let mut seen = std::collections::HashSet::new();
     let ports: Vec<u16> = candidates.into_iter().filter(|p| seen.insert(*p)).collect();
-    append_debug_log!("Probing ports: {:?}", ports);
+    append_debug_log(&format!("Probing ports: {:?}", ports));
 
     let csrf = &info.csrf_token;
 
@@ -406,77 +380,174 @@ async fn find_api_endpoint(local_client: &reqwest::Client, info: &ProcessInfo) -
     // Run probes concurrently, returning early on the first successful one
     while let Some(res) = select_probes.next().await {
         if let Some(ep) = res {
-            append_debug_log!("Found endpoint: {}://127.0.0.1:{}", ep.0, ep.1);
+            append_debug_log(&format!("Found endpoint: {}://127.0.0.1:{}", ep.0, ep.1));
             return Some(ep);
         }
     }
 
-    append_debug_log!("No working endpoint found");
+    append_debug_log("No working endpoint found");
     None
+}
+
+fn parse_summary_pools(parsed: &RetrieveUserQuotaSummaryResponse, display_mode: &str) -> Vec<super::config::QuotaPool> {
+    if display_mode == "detailed" {
+        let mut pools = Vec::new();
+        if let Some(ref groups) = parsed.groups {
+            for g in groups {
+                let g_name = g.display_name.as_deref().unwrap_or("").trim();
+                for b in &g.buckets {
+                    if let Some(rem) = b.remaining_fraction {
+                        let label = b.display_name.as_deref().filter(|s| !s.is_empty())
+                            .or(b.bucket_id.as_deref().filter(|s| !s.is_empty()))
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| {
+                                if !g_name.is_empty() { g_name.to_string() } else { "Model".to_string() }
+                            });
+                        pools.push(super::config::QuotaPool {
+                            label,
+                            remaining_fraction: rem,
+                            reset_time: b.reset_time.clone(),
+                        });
+                    }
+                }
+            }
+        }
+        if pools.is_empty() {
+            if let Some(ref raw_pools) = parsed.pools {
+                for p in raw_pools {
+                    if let (Some(lbl), Some(rem)) = (&p.label, p.remaining_fraction) {
+                        pools.push(super::config::QuotaPool {
+                            label: lbl.clone(),
+                            remaining_fraction: rem,
+                            reset_time: p.reset_time.clone(),
+                        });
+                    }
+                }
+            }
+        }
+        if !pools.is_empty() {
+            return pools;
+        }
+    }
+
+    let mut summary_pools = Vec::new();
+    if let Some(ref groups) = parsed.groups {
+        let labels = ["Gemini", "Claude"];
+        for label in &labels {
+            let is_target_gemini = *label == "Gemini";
+            let mut bucket_5h: Option<(f64, Option<String>)> = None;
+            let mut bucket_weekly: Option<(f64, Option<String>)> = None;
+            let mut min_fraction: Option<f64> = None;
+            let mut fallback_reset: Option<String> = None;
+
+            for g in groups {
+                let g_name = g.display_name.as_deref().unwrap_or("").to_lowercase();
+                let is_gemini = g_name.contains("gemini");
+                let is_claude = g_name.contains("claude") || g_name.contains("gpt") || g_name.contains("3p");
+
+                let matches_group = if is_target_gemini { is_gemini } else { is_claude };
+                if !matches_group { continue; }
+
+                let is_g_5h = g_name.contains("5h") || g_name.contains("5-hour") || g_name.contains("5 hour");
+
+                for b in &g.buckets {
+                    let id_lower = b.bucket_id.as_deref().unwrap_or("").to_lowercase();
+                    let name_lower = b.display_name.as_deref().unwrap_or("").to_lowercase();
+                    let win_lower = b.window.as_deref().unwrap_or("").to_lowercase();
+
+                    let b_is_5h = is_g_5h 
+                        || win_lower.contains("5h") || win_lower.contains("5-hour") || win_lower.contains("5 hour")
+                        || id_lower.contains("5h") || id_lower.contains("5-hour")
+                        || name_lower.contains("5h") || name_lower.contains("5-hour") || name_lower.contains("5 hour") || name_lower.contains("five hour");
+
+                    let b_is_weekly = win_lower.contains("weekly")
+                        || id_lower.contains("weekly")
+                        || name_lower.contains("weekly");
+
+                    if let Some(rem) = b.remaining_fraction {
+                        if min_fraction.map(|m| rem < m).unwrap_or(true) {
+                            min_fraction = Some(rem);
+                        }
+
+                        if b_is_5h {
+                            bucket_5h = Some((rem, b.reset_time.clone()));
+                        } else if b_is_weekly {
+                            bucket_weekly = Some((rem, b.reset_time.clone()));
+                        }
+                    }
+
+                    if fallback_reset.is_none() && b.reset_time.is_some() {
+                        fallback_reset = b.reset_time.clone();
+                    }
+                }
+            }
+
+            // Determine effective fraction and reset time:
+            // 1. If weekly quota is exhausted (weekly_frac <= 0.0), display 0% and weekly reset time so the user knows when weekly resets!
+            // 2. Else if 5h quota is exhausted (5h_frac <= 0.0), display 0% and 5h reset time (when 5h window refreshes).
+            // 3. Else if 5h quota exists, display 5h remaining fraction and 5h reset time (matching IDE UI display).
+            // 4. Otherwise fall back to weekly or min_fraction.
+            let result = match (bucket_5h, bucket_weekly) {
+                (Some((f5, r5)), Some((fw, rw))) => {
+                    if fw <= 0.0 {
+                        // Weekly quota depleted! Show 0% and weekly reset time
+                        Some((0.0, rw.or(r5)))
+                    } else if f5 <= 0.0 {
+                        // 5h quota depleted! Show 0% and 5h reset time
+                        Some((0.0, r5.or(rw)))
+                    } else {
+                        // Both have balance: primary display is 5-hour quota and 5h reset time
+                        Some((f5, r5.or(rw)))
+                    }
+                }
+                (Some((f5, r5)), None) => {
+                    Some((f5, r5))
+                }
+                (None, Some((fw, rw))) => {
+                    Some((fw, rw))
+                }
+                (None, None) => {
+                    min_fraction.map(|m| (m, fallback_reset))
+                }
+            };
+
+            if let Some((rem, reset)) = result {
+                summary_pools.push(super::config::QuotaPool {
+                    label: label.to_string(),
+                    remaining_fraction: rem,
+                    reset_time: reset,
+                });
+            }
+        }
+    }
+
+    if summary_pools.is_empty() {
+        if let Some(ref pools) = parsed.pools {
+            for p in pools {
+                if let (Some(lbl), Some(rem)) = (&p.label, p.remaining_fraction) {
+                    summary_pools.push(super::config::QuotaPool {
+                        label: lbl.clone(),
+                        remaining_fraction: rem,
+                        reset_time: p.reset_time.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    summary_pools
 }
 
 // ─── Local language server quota fetch ───────────────────────────────────────
 
-async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Result<(Vec<super::config::QuotaPool>, String), String> {
-    append_debug_log!("--- fetch_local_language_server_quota start ---");
+async fn fetch_local_language_server_quota(local_client: &reqwest::Client, display_mode: &str) -> Result<(Vec<super::config::QuotaPool>, String), String> {
+    append_debug_log("--- fetch_local_language_server_quota start ---");
 
-    let cached_opt = {
-        let guard = get_endpoint_cache().lock().await;
-        guard.clone()
-    };
+    let info = detect_antigravity_process().await
+        .ok_or_else(|| "Antigravity process not detected".to_string())?;
 
-    let (info, scheme, port) = if let Some(cached) = cached_opt {
-        append_debug_log!("Probing cached endpoint: {}://127.0.0.1:{}", cached.scheme, cached.port);
-        if probe_port(local_client, &cached.scheme, cached.port, &cached.csrf_token).await {
-            append_debug_log!("Cached endpoint probe succeeded!");
-            let info = ProcessInfo {
-                csrf_token: cached.csrf_token.clone(),
-                extension_server_csrf_token: cached.extension_server_csrf_token.clone(),
-                extension_port: cached.port,
-                pid: cached.pid,
-            };
-            (info, cached.scheme, cached.port)
-        } else {
-            append_debug_log!("Cached endpoint probe failed, clearing cache and running full detect");
-            {
-                let mut guard = get_endpoint_cache().lock().await;
-                *guard = None;
-            }
-            let info = detect_antigravity_process().await
-                .ok_or_else(|| "Antigravity process not detected".to_string())?;
-            let (scheme, port) = find_api_endpoint(local_client, &info).await
-                .ok_or_else(|| "Could not find Antigravity local API port".to_string())?;
-            
-            {
-                let mut guard = get_endpoint_cache().lock().await;
-                *guard = Some(CachedEndpoint {
-                    pid: info.pid,
-                    scheme: scheme.clone(),
-                    port,
-                    csrf_token: info.csrf_token.clone(),
-                    extension_server_csrf_token: info.extension_server_csrf_token.clone(),
-                });
-            }
-            (info, scheme, port)
-        }
-    } else {
-        let info = detect_antigravity_process().await
-            .ok_or_else(|| "Antigravity process not detected".to_string())?;
-        let (scheme, port) = find_api_endpoint(local_client, &info).await
-            .ok_or_else(|| "Could not find Antigravity local API port".to_string())?;
-
-        {
-            let mut guard = get_endpoint_cache().lock().await;
-            *guard = Some(CachedEndpoint {
-                pid: info.pid,
-                scheme: scheme.clone(),
-                port,
-                csrf_token: info.csrf_token.clone(),
-                extension_server_csrf_token: info.extension_server_csrf_token.clone(),
-            });
-        }
-        (info, scheme, port)
-    };
+    let (scheme, port) = find_api_endpoint(local_client, &info).await
+        .ok_or_else(|| "Could not find Antigravity local API port".to_string())?;
 
     let base_url = format!("{}://127.0.0.1:{}/exa.language_server_pb.LanguageServerService", scheme, port);
 
@@ -489,105 +560,10 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
         }
     });
 
-    let mut local_status_success = false;
-    let mut local_pools_result = Vec::new();
+    let mut retrieve_summary_success = false;
+    let mut pools_result = Vec::new();
 
-    append_debug_log!("Calling GetUserStatus at {}", base_url);
-
-    let res_status = if let Some(ref ext_csrf) = info.extension_server_csrf_token {
-        let r = local_client.post(&format!("{}/GetUserStatus", base_url))
-            .header("Connect-Protocol-Version", "1")
-            .header("X-Codeium-Csrf-Token", ext_csrf)
-            .json(&meta)
-            .send()
-            .await;
-        match r {
-            Ok(resp) if resp.status().is_success() => Ok(resp),
-            _ => {
-                append_debug_log!("Extension CSRF failed for GetUserStatus, retrying with main CSRF");
-                local_client.post(&format!("{}/GetUserStatus", base_url))
-                    .header("Connect-Protocol-Version", "1")
-                    .header("X-Codeium-Csrf-Token", &info.csrf_token)
-                    .json(&meta)
-                    .send()
-                    .await
-            }
-        }
-    } else {
-        local_client.post(&format!("{}/GetUserStatus", base_url))
-            .header("Connect-Protocol-Version", "1")
-            .header("X-Codeium-Csrf-Token", &info.csrf_token)
-            .json(&meta)
-            .send()
-            .await
-    };
-
-    if let Ok(resp) = res_status {
-        if resp.status().is_success() {
-            if let Ok(body) = resp.text().await {
-                if let Ok(status_resp) = serde_json::from_str::<UserStatusResponse>(&body) {
-                    let configs = status_resp.user_status
-                        .and_then(|us| us.cascade_model_config_data)
-                        .map(|d| d.client_model_configs)
-                        .unwrap_or_default();
-
-                    let mut gemini_min: Option<(f64, Option<String>)> = None;
-                    let mut claude_min: Option<(f64, Option<String>)> = None;
-
-                    for c in configs {
-                        let label_lower = c.label.to_lowercase();
-                        if let Some(ref q) = c.quota_info {
-                            if let Some(rem_frac) = q.remaining_fraction {
-                                let reset = q.reset_time.clone();
-                                if label_lower.starts_with("gemini") {
-                                    if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                                        gemini_min = Some((rem_frac, reset));
-                                    }
-                                } else if label_lower.starts_with("claude") || label_lower.starts_with("gpt-oss") {
-                                    if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                                        claude_min = Some((rem_frac, reset));
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if let Some((frac, reset)) = gemini_min {
-                        local_pools_result.push(super::config::QuotaPool {
-                            label: "Gemini".to_string(),
-                            remaining_fraction: frac,
-                            reset_time: reset,
-                        });
-                    }
-                    if let Some((frac, reset)) = claude_min {
-                        local_pools_result.push(super::config::QuotaPool {
-                            label: "Claude".to_string(),
-                            remaining_fraction: frac,
-                            reset_time: reset,
-                        });
-                    }
-
-                    if !local_pools_result.is_empty() {
-                        local_status_success = true;
-                        append_debug_log!("Successfully parsed GetUserStatus with {} pools", local_pools_result.len());
-                    }
-                } else {
-                    append_debug_log!("Failed to parse UserStatusResponse json");
-                }
-            }
-        } else {
-            append_debug_log!("GetUserStatus returned non-200: {}", resp.status());
-        }
-    } else {
-        append_debug_log!("GetUserStatus request failed");
-    }
-
-    if local_status_success {
-        return Ok((local_pools_result, "local".to_string()));
-    }
-
-    // Fallback: RetrieveUserQuotaSummary
-    append_debug_log!("Falling back to RetrieveUserQuotaSummary");
+    append_debug_log(&format!("Calling RetrieveUserQuotaSummary at {}", base_url));
 
     let res_summary = if let Some(ref ext_csrf) = info.extension_server_csrf_token {
         let r = local_client.post(&format!("{}/RetrieveUserQuotaSummary", base_url))
@@ -599,7 +575,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
         match r {
             Ok(resp) if resp.status().is_success() => Ok(resp),
             _ => {
-                append_debug_log!("Extension CSRF failed or rejected for RetrieveUserQuotaSummary, retrying with main CSRF");
+                append_debug_log("Extension CSRF failed for RetrieveUserQuotaSummary, retrying with main CSRF");
                 local_client.post(&format!("{}/RetrieveUserQuotaSummary", base_url))
                     .header("Connect-Protocol-Version", "1")
                     .header("X-Codeium-Csrf-Token", &info.csrf_token)
@@ -621,107 +597,148 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
         if resp.status().is_success() {
             if let Ok(body) = resp.text().await {
                 if let Ok(parsed) = serde_json::from_str::<RetrieveUserQuotaSummaryResponse>(&body) {
-                    if let Some(pools) = parsed.pools {
-                        let mut summary_pools = Vec::new();
-                        for p in pools {
-                            if let (Some(lbl), Some(rem)) = (p.label, p.remaining_fraction) {
-                                summary_pools.push(super::config::QuotaPool {
-                                    label: lbl,
-                                    remaining_fraction: rem,
-                                    reset_time: p.reset_time,
-                                });
-                            }
+                    pools_result = parse_summary_pools(&parsed, display_mode);
+                    if !pools_result.is_empty() {
+                        retrieve_summary_success = true;
+                        append_debug_log(&format!("Successfully parsed RetrieveUserQuotaSummary with {} pools", pools_result.len()));
+                    }
+                } else {
+                    append_debug_log("Failed to parse RetrieveUserQuotaSummaryResponse json");
+                }
+            }
+        } else {
+            append_debug_log(&format!("RetrieveUserQuotaSummary returned non-200: {}", resp.status()));
+        }
+    } else {
+        append_debug_log("RetrieveUserQuotaSummary request failed");
+    }
+
+    if retrieve_summary_success {
+        return Ok((pools_result, "local".to_string()));
+    }
+
+    // Fallback: query GetUserStatus and merge manually
+    append_debug_log("Falling back to GetUserStatus with manual merging");
+    
+    let res_status = if let Some(ref ext_csrf) = info.extension_server_csrf_token {
+        let r = local_client.post(&format!("{}/GetUserStatus", base_url))
+            .header("Connect-Protocol-Version", "1")
+            .header("X-Codeium-Csrf-Token", ext_csrf)
+            .json(&meta)
+            .send()
+            .await;
+        match r {
+            Ok(resp) if resp.status().is_success() => Ok(resp),
+            _ => {
+                append_debug_log("Extension CSRF failed or rejected, retrying with main CSRF");
+                local_client.post(&format!("{}/GetUserStatus", base_url))
+                    .header("Connect-Protocol-Version", "1")
+                    .header("X-Codeium-Csrf-Token", &info.csrf_token)
+                    .json(&meta)
+                    .send()
+                    .await
+            }
+        }
+    } else {
+        local_client.post(&format!("{}/GetUserStatus", base_url))
+            .header("Connect-Protocol-Version", "1")
+            .header("X-Codeium-Csrf-Token", &info.csrf_token)
+            .json(&meta)
+            .send()
+            .await
+    }.map_err(|e| { append_debug_log(&format!("Request error: {}", e)); format!("GetUserStatus request failed: {}", e) })?;
+
+    let status = res_status.status();
+    if !status.is_success() {
+        return Err(format!("GetUserStatus returned error: {}", status));
+    }
+
+    let body = res_status.text().await.map_err(|e| format!("Failed to read body: {}", e))?;
+    let status_resp: UserStatusResponse = serde_json::from_str(&body)
+        .map_err(|e| { append_debug_log(&format!("JSON parse error: {}", e)); format!("Failed to parse response: {}", e) })?;
+
+    let configs = status_resp.user_status
+        .and_then(|us| us.cascade_model_config_data)
+        .map(|d| d.client_model_configs)
+        .unwrap_or_default();
+
+    let mut fallback_pools = Vec::new();
+
+    if display_mode == "detailed" {
+        for c in configs {
+            if let Some(ref q) = c.quota_info {
+                if let Some(rem_frac) = q.remaining_fraction {
+                    fallback_pools.push(super::config::QuotaPool {
+                        label: c.label.clone(),
+                        remaining_fraction: rem_frac,
+                        reset_time: q.reset_time.clone(),
+                    });
+                }
+            }
+        }
+    } else {
+        let mut gemini_min: Option<(f64, Option<String>)> = None;
+        let mut claude_min: Option<(f64, Option<String>)> = None;
+
+        for c in configs {
+            let label_lower = c.label.to_lowercase();
+            if let Some(ref q) = c.quota_info {
+                if let Some(rem_frac) = q.remaining_fraction {
+                    let reset = q.reset_time.clone();
+                    if label_lower.starts_with("gemini") {
+                        if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
+                            gemini_min = Some((rem_frac, reset));
                         }
-                        if !summary_pools.is_empty() {
-                            return Ok((summary_pools, "local".to_string()));
+                    } else if label_lower.starts_with("claude") || label_lower.starts_with("gpt-oss") {
+                        if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
+                            claude_min = Some((rem_frac, reset));
                         }
                     }
                 }
             }
         }
+
+        if let Some((frac, reset)) = gemini_min {
+            fallback_pools.push(super::config::QuotaPool {
+                label: "Gemini".to_string(),
+                remaining_fraction: frac,
+                reset_time: reset,
+            });
+        }
+        if let Some((frac, reset)) = claude_min {
+            fallback_pools.push(super::config::QuotaPool {
+                label: "Claude".to_string(),
+                remaining_fraction: frac,
+                reset_time: reset,
+            });
+        }
     }
 
-    Err("Failed to fetch quota from local language server endpoints".to_string())
+    if fallback_pools.is_empty() {
+        return Err("No matching models found in manual fallback".to_string());
+    }
+
+    Ok((fallback_pools, "local".to_string()))
 }
 
 // ─── Token retrieval for cloud fallback ──────────────────────────────────────
 
-fn select_account_from_credentials(creds: CockpitCredentials, preferred_account: &str) -> Option<(CockpitAccount, String)> {
-    if creds.accounts.is_empty() {
-        return None;
-    }
-
-    let accounts_with_email: Vec<(CockpitAccount, String)> = creds.accounts.into_iter().map(|(key, acct)| {
-        let email = acct.email.clone().unwrap_or_else(|| key);
-        (acct, email)
-    }).collect();
-
-    // Priority 1: Check preferred_account match
-    if !preferred_account.trim().is_empty() {
-        let pref_lower = preferred_account.trim().to_lowercase();
-        if let Some((acct, email)) = accounts_with_email.iter().find(|(_, email)| email.to_lowercase() == pref_lower) {
-            append_debug_log!("Found matching preferred account: {}", email);
-            return Some((acct.clone(), email.clone()));
-        } else {
-            append_debug_log!("Preferred account '{}' not found in credentials.json accounts, falling back to auto-selection", preferred_account.trim());
-        }
-    }
-
-    let now = chrono::Utc::now();
-
-    struct EvaluatedAccount {
-        acct: CockpitAccount,
-        email: String,
-        expiry: Option<DateTime<Utc>>,
-    }
-
-    let evaluated: Vec<EvaluatedAccount> = accounts_with_email.into_iter().map(|(acct, email)| {
-        let expiry = acct.expires_at.as_ref()
-            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-            .map(|dt| dt.with_timezone(&Utc));
-        EvaluatedAccount { acct, email, expiry }
-    }).collect();
-
-    // Priority 2: Pick token valid for >5 minutes with furthest expiry
-    let valid_candidates: Vec<&EvaluatedAccount> = evaluated.iter()
-        .filter(|e| e.expiry.map(|exp| exp > now + chrono::Duration::minutes(5)).unwrap_or(false))
-        .collect();
-
-    if let Some(best) = valid_candidates.into_iter().max_by_key(|e| e.expiry) {
-        return Some((best.acct.clone(), best.email.clone()));
-    }
-
-    // Priority 3: Pick entry with furthest expiry overall
-    if let Some(best) = evaluated.into_iter().max_by_key(|e| e.expiry) {
-        return Some((best.acct.clone(), best.email.clone()));
-    }
-
-    None
-}
-
-fn get_cached_antigravity_token(custom_path: &str, preferred_account: &str) -> Option<(CockpitAccount, String)> {
+fn get_cached_antigravity_token(custom_path: &str) -> Option<CockpitAccount> {
     // Try custom path first
     if !custom_path.is_empty() {
         if let Ok(content) = fs::read_to_string(custom_path) {
-            if let Ok(creds) = serde_json::from_str::<CockpitCredentials>(&content) {
-                if let Some(res) = select_account_from_credentials(creds, preferred_account) {
-                    return Some(res);
-                }
-            }
             if let Ok(acct) = serde_json::from_str::<CockpitAccount>(&content) {
-                let email = acct.email.clone().unwrap_or_else(|| "custom_account".to_string());
-                return Some((acct, email));
+                return Some(acct);
             }
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
                 if let Some(token) = val["refresh_token"].as_str() {
-                    let email = val["email"].as_str().unwrap_or("custom_account").to_string();
-                    return Some((CockpitAccount {
-                        email: Some(email.clone()),
+                    return Some(CockpitAccount {
+                        email: None,
                         refresh_token: Some(token.to_string()),
                         access_token: None,
                         expires_at: None,
                         project_id: None,
-                    }, email));
+                    });
                 }
             }
         }
@@ -756,8 +773,8 @@ fn get_cached_antigravity_token(custom_path: &str, preferred_account: &str) -> O
         if let Ok(content) = fs::read_to_string(path) {
             // Try CockpitCredentials format
             if let Ok(creds) = serde_json::from_str::<CockpitCredentials>(&content) {
-                if let Some(res) = select_account_from_credentials(creds, preferred_account) {
-                    return Some(res);
+                if let Some(acct) = creds.accounts.values().next() {
+                    return Some(acct.clone());
                 }
             }
             // Try plain JSON with refresh_token / accessToken / refreshToken
@@ -782,16 +799,14 @@ fn get_cached_antigravity_token(custom_path: &str, preferred_account: &str) -> O
                     .or_else(|| val["projectId"].as_str())
                     .map(String::from);
 
-                let email = val["email"].as_str().unwrap_or("unknown_account").to_string();
-
                 if refresh_token.is_some() || access_token.is_some() {
-                    return Some((CockpitAccount {
-                        email: Some(email.clone()),
+                    return Some(CockpitAccount {
+                        email: val["email"].as_str().map(String::from),
                         refresh_token,
                         access_token,
                         expires_at,
                         project_id,
-                    }, email));
+                    });
                 }
             }
         }
@@ -803,7 +818,41 @@ fn get_cached_antigravity_token(custom_path: &str, preferred_account: &str) -> O
 // ─── Main fetch_quota ────────────────────────────────────────────────────────
 
 pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Client, config: &super::config::Config) -> Result<(Vec<super::config::QuotaPool>, String, Option<String>), String> {
-    // Priority 1: Local Loopback Server legacy endpoint
+    let mode = config.quota_source_mode.to_lowercase();
+    append_debug_log(&format!("fetch_quota called with quota_source_mode='{}'", mode));
+
+    if mode == "cloud" {
+        return fetch_cloud_quota(client, config).await;
+    }
+
+    if mode == "local" {
+        // Mode: Local Only (Priority 1: Loopback, Priority 2: Scraper)
+        if let Ok(res) = client.get("http://localhost:8999/quota").send().await {
+            if let Ok(body) = res.text().await {
+                if let Ok(data) = serde_json::from_str::<QuotaResponseGoogle>(&body) {
+                    let remaining = (data.quota.total - data.quota.used) as f64;
+                    let fraction = if data.quota.total > 0 { remaining / (data.quota.total as f64) } else { 0.0 };
+                    return Ok((vec![super::config::QuotaPool {
+                        label: "Gemini".to_string(),
+                        remaining_fraction: fraction,
+                        reset_time: Some(data.quota.reset_time),
+                    }], "local".to_string(), None));
+                } else if let Ok(data) = serde_json::from_str::<QuotaResponseDirect>(&body) {
+                    let fraction = if data.total > 0 { (data.remaining as f64) / (data.total as f64) } else { 0.0 };
+                    return Ok((vec![super::config::QuotaPool {
+                        label: "Gemini".to_string(),
+                        remaining_fraction: fraction,
+                        reset_time: None,
+                    }], "local".to_string(), None));
+                }
+            }
+        }
+
+        return fetch_local_language_server_quota(local_client, &config.display_mode).await
+            .map(|(pools, src)| (pools, src, None));
+    }
+
+    // Mode: Auto (Default) -> Priority 1 (Loopback) -> Priority 2 (Local Scraper) -> Priority 3 (Cloud Fallback)
     if let Ok(res) = client.get("http://localhost:8999/quota").send().await {
         if let Ok(body) = res.text().await {
             if let Ok(data) = serde_json::from_str::<QuotaResponseGoogle>(&body) {
@@ -825,17 +874,15 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
         }
     }
 
-    // Priority 2: Direct local language server scraping
-    match fetch_local_language_server_quota(local_client).await {
+    match fetch_local_language_server_quota(local_client, &config.display_mode).await {
         Ok((pools, src)) => return Ok((pools, src, None)),
-        Err(e) => append_debug_log!("Local scraper failed: {}", e),
+        Err(e) => append_debug_log(&format!("Local scraper failed: {}", e)),
     }
 
-    // Priority 3: Cloud OAuth fallback
     fetch_cloud_quota(client, config).await
 }
 
-async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config::Config) -> Result<(Vec<super::config::QuotaPool>, String, Option<String>), String> {
+pub async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config::Config) -> Result<(Vec<super::config::QuotaPool>, String, Option<String>), String> {
     let mut access_token: Option<String> = None;
     let mut project_id: Option<String> = None;
     let mut refresh_token: Option<String> = None;
@@ -846,10 +893,10 @@ async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config::Con
         refresh_token = Some(config.refresh_token_override.clone());
     } else {
         // Retrieve credentials from file
-        if let Some((acct, email)) = get_cached_antigravity_token(&config.antigravity_config_path, &config.preferred_account) {
+        if let Some(acct) = get_cached_antigravity_token(&config.antigravity_config_path) {
             refresh_token = acct.refresh_token;
             project_id = acct.project_id;
-            active_email = Some(email);
+            active_email = acct.email;
 
             if let (Some(token), Some(expiry_str)) = (acct.access_token, acct.expires_at) {
                 if let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(&expiry_str) {
@@ -863,21 +910,9 @@ async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config::Con
         }
     }
 
-    // Check in-memory CLOUD_CACHE if not using override & atomic email diff check under mutex lock
+    // Check in-memory CLOUD_CACHE if not using override
     if config.refresh_token_override.is_empty() {
-        let mut cache = get_cloud_cache().lock().await;
-
-        if let Some(ref current_email) = active_email {
-            let is_email_changed = cache.cached_email.as_ref().map(|ce| ce != current_email).unwrap_or(false);
-            if is_email_changed {
-                append_debug_log!("Account email changed from {:?} to {}, invalidating cloud cache", cache.cached_email, current_email);
-                cache.access_token = None;
-                cache.expires_at = None;
-                cache.project_id = None;
-                cache.cached_email = Some(current_email.clone());
-            }
-        }
-
+        let cache = get_cloud_cache().lock().await;
         if access_token.is_none() {
             if let (Some(token), Some(expiry)) = (&cache.access_token, cache.expires_at) {
                 let now = chrono::Utc::now();
@@ -917,14 +952,11 @@ async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config::Con
         
         access_token = Some(token_data.access_token);
         
-        // Cache refreshed access token in memory and sync cached_email
+        // Cache refreshed access token in memory
         let mut cache = get_cloud_cache().lock().await;
         cache.access_token = access_token.clone();
         // Assume access token is valid for 55 minutes
         cache.expires_at = Some(chrono::Utc::now() + chrono::Duration::minutes(55));
-        if let Some(ref current_email) = active_email {
-            cache.cached_email = Some(current_email.clone());
-        }
     }
 
     let access_token_str = access_token.as_ref().ok_or_else(|| "No access token".to_string())?;
@@ -1005,9 +1037,7 @@ async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config::Con
         None => serde_json::json!({}),
     };
 
-    append_debug_log!("--- retrieveUserQuotaSummary cloud path start ---");
-
-    // Primary Cloud Source: Call retrieveUserQuotaSummary (dynamic rate limits from Cloud API)
+    // Primary Cloud Source: Call retrieveUserQuotaSummary
     let quota_res_summary = client
         .post("https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary")
         .bearer_auth(access_token_str)
@@ -1019,69 +1049,105 @@ async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config::Con
 
     if let Ok(resp) = quota_res_summary {
         let status = resp.status();
-        append_debug_log!("retrieveUserQuotaSummary HTTP status: {}", status);
+        append_debug_log(&format!("retrieveUserQuotaSummary HTTP status: {}", status));
         if status.is_success() {
             if let Ok(body) = resp.text().await {
+                append_debug_log(&format!("retrieveUserQuotaSummary raw body:\n{}", body));
+                println!("retrieveUserQuotaSummary raw body:\n{}", body);
+
                 if let Ok(parsed) = serde_json::from_str::<RetrieveUserQuotaSummaryResponse>(&body) {
-                    let mut summary_pools = Vec::new();
-
-                    // Parse groups (e.g. Gemini Models, Claude and GPT models)
-                    if let Some(groups) = parsed.groups {
-                        for g in groups {
-                            let g_name = g.display_name.as_deref().unwrap_or("").to_lowercase();
-                            let is_gemini = g_name.contains("gemini");
-                            let is_claude = g_name.contains("claude") || g_name.contains("gpt") || g_name.contains("3p");
-
-                            if is_gemini || is_claude {
-                                let label = if is_gemini { "Gemini" } else { "Claude" };
-                                let mut min_bucket: Option<(f64, Option<String>)> = None;
-
-                                for b in g.buckets {
-                                    if let Some(rem) = b.remaining_fraction {
-                                        if min_bucket.as_ref().map(|(m, _)| rem < *m).unwrap_or(true) {
-                                            min_bucket = Some((rem, b.reset_time));
-                                        }
-                                    }
-                                }
-
-                                if let Some((rem, reset)) = min_bucket {
-                                    summary_pools.push(super::config::QuotaPool {
-                                        label: label.to_string(),
-                                        remaining_fraction: rem,
-                                        reset_time: reset,
-                                    });
-                                }
-                            }
-                        }
-                    }
-
-                    // Fallback to legacy pools array if groups was empty
-                    if summary_pools.is_empty() {
-                        if let Some(pools) = parsed.pools {
-                            for p in pools {
-                                if let (Some(lbl), Some(rem)) = (p.label, p.remaining_fraction) {
-                                    summary_pools.push(super::config::QuotaPool {
-                                        label: lbl,
-                                        remaining_fraction: rem,
-                                        reset_time: p.reset_time,
-                                    });
-                                }
-                            }
-                        }
-                    }
+                    let summary_pools = parse_summary_pools(&parsed, &config.display_mode);
 
                     if !summary_pools.is_empty() {
-                        append_debug_log!("retrieveUserQuotaSummary succeeded with {} pools", summary_pools.len());
+                        append_debug_log(&format!("retrieveUserQuotaSummary succeeded with {} pools", summary_pools.len()));
                         return Ok((summary_pools, "cloud".to_string(), active_email));
                     }
                 } else {
-                    append_debug_log!("retrieveUserQuotaSummary JSON parse fail");
+                    append_debug_log("retrieveUserQuotaSummary JSON parse fail");
                 }
             }
         }
     }
 
-    Err("Failed to fetch quota from cloud API endpoints".to_string())
+    // Secondary Cloud Fallback: fetchAvailableModels
+    let quota_res = client
+        .post("https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels")
+        .bearer_auth(access_token_str)
+        .header("User-Agent", "antigravity/1.104.0 windows/amd64")
+        .header("Client-Metadata", "{\"ideType\":\"ANTIGRAVITY\",\"platform\":\"WINDOWS\",\"pluginType\":\"GEMINI\"}")
+        .json(&req_body)
+        .send()
+        .await
+        .map_err(|e| format!("Quota request failed: {}", e))?;
+
+    if !quota_res.status().is_success() {
+        let status = quota_res.status();
+        let body = quota_res.text().await.unwrap_or_default();
+        return Err(format!("Quota API returned error ({}): {}", status, body));
+    }
+
+    let quota_res_data: FetchAvailableModelsResponse = quota_res.json().await
+        .map_err(|e| format!("Failed to parse quota response: {}", e))?;
+
+    let mut cloud_fallback_pools = Vec::new();
+
+    if config.display_mode == "detailed" {
+        for (k, v) in quota_res_data.models {
+            let label = v.display_name.unwrap_or(k);
+            if let Some(ref q) = v.quota_info {
+                if let Some(rem_frac) = q.remaining_fraction {
+                    cloud_fallback_pools.push(super::config::QuotaPool {
+                        label,
+                        remaining_fraction: rem_frac,
+                        reset_time: q.reset_time.clone(),
+                    });
+                }
+            }
+        }
+    } else {
+        let mut gemini_min: Option<(f64, Option<String>)> = None;
+        let mut claude_min: Option<(f64, Option<String>)> = None;
+
+        for (k, v) in quota_res_data.models {
+            let label_lower = k.to_lowercase();
+            let display_lower = v.display_name.as_ref().map(|d| d.to_lowercase()).unwrap_or_default();
+            if let Some(ref q) = v.quota_info {
+                if let Some(rem_frac) = q.remaining_fraction {
+                    let reset = q.reset_time.clone();
+                    if label_lower.contains("gemini") || display_lower.contains("gemini") {
+                        if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
+                            gemini_min = Some((rem_frac, reset));
+                        }
+                    } else if label_lower.contains("claude") || display_lower.contains("claude") || label_lower.contains("gpt-oss") || display_lower.contains("gpt-oss") {
+                        if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
+                            claude_min = Some((rem_frac, reset));
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some((frac, reset)) = gemini_min {
+            cloud_fallback_pools.push(super::config::QuotaPool {
+                label: "Gemini".to_string(),
+                remaining_fraction: frac,
+                reset_time: reset,
+            });
+        }
+        if let Some((frac, reset)) = claude_min {
+            cloud_fallback_pools.push(super::config::QuotaPool {
+                label: "Claude".to_string(),
+                remaining_fraction: frac,
+                reset_time: reset,
+            });
+        }
+    }
+
+    if cloud_fallback_pools.is_empty() {
+        return Err("No matching models found in cloud manual fallback".to_string());
+    }
+
+    Ok((cloud_fallback_pools, "cloud".to_string(), active_email))
 }
 
 #[cfg(test)]
@@ -1110,5 +1176,68 @@ mod tests {
         let res = fetch_cloud_quota(&client, &config).await;
         println!("FETCH CLOUD QUOTA RESULT: {:?}", res);
         assert!(res.is_ok(), "Expected fetch_cloud_quota to succeed, got: {:?}", res);
+    }
+
+    #[test]
+    fn test_parse_summary_pools_priority() {
+        let json_str = r#"{
+            "groups": [
+                {
+                    "displayName": "Gemini Models",
+                    "buckets": [
+                        {
+                            "bucketId": "gemini-weekly",
+                            "window": "weekly",
+                            "resetTime": "2026-07-28T19:00:51Z",
+                            "remainingFraction": 0.648
+                        },
+                        {
+                            "bucketId": "gemini-5h",
+                            "window": "5h",
+                            "resetTime": "2026-07-24T04:30:04Z",
+                            "remainingFraction": 0.98
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        let response: RetrieveUserQuotaSummaryResponse = serde_json::from_str(json_str).unwrap();
+        let pools = parse_summary_pools(&response, "summary");
+
+        assert_eq!(pools.len(), 1);
+        assert_eq!(pools[0].label, "Gemini");
+        assert_eq!(pools[0].remaining_fraction, 0.98);
+        assert_eq!(pools[0].reset_time, Some("2026-07-24T04:30:04Z".to_string()));
+
+        // Test Weekly Exhausted scenario
+        let json_weekly_depleted = r#"{
+            "groups": [
+                {
+                    "displayName": "Gemini Models",
+                    "buckets": [
+                        {
+                            "bucketId": "gemini-weekly",
+                            "window": "weekly",
+                            "resetTime": "2026-07-28T19:00:51Z",
+                            "remainingFraction": 0.0
+                        },
+                        {
+                            "bucketId": "gemini-5h",
+                            "window": "5h",
+                            "resetTime": "2026-07-24T04:30:04Z",
+                            "remainingFraction": 1.0
+                        }
+                    ]
+                }
+            ]
+        }"#;
+
+        let response_depleted: RetrieveUserQuotaSummaryResponse = serde_json::from_str(json_weekly_depleted).unwrap();
+        let pools_depleted = parse_summary_pools(&response_depleted, "summary");
+
+        assert_eq!(pools_depleted.len(), 1);
+        assert_eq!(pools_depleted[0].remaining_fraction, 0.0);
+        assert_eq!(pools_depleted[0].reset_time, Some("2026-07-28T19:00:51Z".to_string()));
     }
 }
