@@ -11,6 +11,8 @@
     position_corner: string;
     reset_time_utc: string;
     autostart: boolean;
+    preferred_account: string;
+    mask_account_email: boolean;
   }
 
   let config = $state<Config>({
@@ -22,6 +24,8 @@
     position_corner: "bottom-right",
     reset_time_utc: "00:00",
     autostart: true,
+    preferred_account: "",
+    mask_account_email: false,
   });
 
   let statusMsg = $state("");
@@ -97,6 +101,18 @@
     <div class="form-group">
       <label for="reset_time">Daily Reset Time (UTC)</label>
       <input id="reset_time" type="text" bind:value={config.reset_time_utc} placeholder="00:00" />
+    </div>
+
+    <div class="form-group">
+      <label for="preferred_account">Preferred Account Email (Optional)</label>
+      <input id="preferred_account" type="text" bind:value={config.preferred_account} placeholder="user@gmail.com" />
+    </div>
+
+    <div class="form-group checkbox-group">
+      <label for="mask_account_email">
+        <input id="mask_account_email" type="checkbox" bind:checked={config.mask_account_email} />
+        Mask Email on Widget (Privacy)
+      </label>
     </div>
 
     <div class="form-group checkbox-group">

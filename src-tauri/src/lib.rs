@@ -33,21 +33,26 @@ fn get_config() -> config::Config {
     config::load_config()
 }
 
+async fn trigger_refresh_internal(app_handle: &AppHandle, state: &AppState) {
+    let _ = app_handle.emit("refresh-started", ());
+    let _ = state.refresh_trigger.send(()).await;
+}
+
 #[tauri::command]
-async fn save_config(app_handle: AppHandle, new_config: config::Config) -> Result<(), String> {
+async fn save_config(app_handle: AppHandle, state: State<'_, AppState>, new_config: config::Config) -> Result<(), String> {
     config::save_config(&new_config).map_err(|e| e.to_string())?;
     let _ = toggle_autostart(new_config.autostart);
     if let Some(window) = app_handle.get_webview_window("main") {
         windows_layer::setup_with_retry(&window).await;
     }
     let _ = app_handle.emit("config-updated", new_config);
+    trigger_refresh_internal(&app_handle, &state).await;
     Ok(())
 }
 
 #[tauri::command]
 async fn manual_refresh_trigger(app_handle: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let _ = app_handle.emit("refresh-started", ());
-    let _ = state.refresh_trigger.send(()).await;
+    trigger_refresh_internal(&app_handle, &state).await;
     Ok(())
 }
 
@@ -128,11 +133,12 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
         let mut new_cache = config::load_cache();
 
         match quota_client::fetch_quota(&state.client, &state.local_client, &config).await {
-            Ok((pools, src)) => {
+            Ok((pools, src, email_opt)) => {
                 new_cache.pools = pools;
                 new_cache.is_offline = false;
                 new_cache.error_reason = None;
                 new_cache.source = src;
+                new_cache.account_email = email_opt;
                 new_cache.last_updated = chrono::Utc::now().to_rfc3339();
             }
             Err(err) => {
@@ -143,6 +149,7 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
                     new_cache.error_reason = Some("offline".to_string());
                 }
                 new_cache.source = String::new();
+                new_cache.account_email = None;
             }
         }
         let _ = config::save_cache(&new_cache);

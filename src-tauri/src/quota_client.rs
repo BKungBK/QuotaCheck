@@ -79,6 +79,7 @@ struct CloudCache {
     access_token: Option<String>,
     expires_at: Option<DateTime<Utc>>,
     project_id: Option<String>,
+    cached_email: Option<String>,
 }
 
 fn get_cloud_cache() -> &'static Mutex<CloudCache> {
@@ -87,6 +88,7 @@ fn get_cloud_cache() -> &'static Mutex<CloudCache> {
         access_token: None,
         expires_at: None,
         project_id: None,
+        cached_email: None,
     }))
 }
 
@@ -619,22 +621,79 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
 
 // ─── Token retrieval for cloud fallback ──────────────────────────────────────
 
-fn get_cached_antigravity_token(custom_path: &str) -> Option<CockpitAccount> {
+fn select_account_from_credentials(creds: CockpitCredentials, preferred_account: &str) -> Option<(CockpitAccount, String)> {
+    if creds.accounts.is_empty() {
+        return None;
+    }
+
+    let accounts_with_email: Vec<(CockpitAccount, String)> = creds.accounts.into_iter().map(|(key, acct)| {
+        let email = acct.email.clone().unwrap_or_else(|| key);
+        (acct, email)
+    }).collect();
+
+    // Priority 1: Check preferred_account match
+    if !preferred_account.is_empty() {
+        let pref_lower = preferred_account.trim().to_lowercase();
+        if let Some((acct, email)) = accounts_with_email.iter().find(|(_, email)| email.to_lowercase() == pref_lower) {
+            return Some((acct.clone(), email.clone()));
+        }
+    }
+
+    let now = chrono::Utc::now();
+
+    struct EvaluatedAccount {
+        acct: CockpitAccount,
+        email: String,
+        expiry: Option<DateTime<Utc>>,
+    }
+
+    let evaluated: Vec<EvaluatedAccount> = accounts_with_email.into_iter().map(|(acct, email)| {
+        let expiry = acct.expires_at.as_ref()
+            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| dt.with_timezone(&Utc));
+        EvaluatedAccount { acct, email, expiry }
+    }).collect();
+
+    // Priority 2: Pick token valid for >5 minutes with furthest expiry
+    let valid_candidates: Vec<&EvaluatedAccount> = evaluated.iter()
+        .filter(|e| e.expiry.map(|exp| exp > now + chrono::Duration::minutes(5)).unwrap_or(false))
+        .collect();
+
+    if let Some(best) = valid_candidates.into_iter().max_by_key(|e| e.expiry) {
+        return Some((best.acct.clone(), best.email.clone()));
+    }
+
+    // Priority 3: Pick entry with furthest expiry overall
+    if let Some(best) = evaluated.into_iter().max_by_key(|e| e.expiry) {
+        return Some((best.acct.clone(), best.email.clone()));
+    }
+
+    None
+}
+
+fn get_cached_antigravity_token(custom_path: &str, preferred_account: &str) -> Option<(CockpitAccount, String)> {
     // Try custom path first
     if !custom_path.is_empty() {
         if let Ok(content) = fs::read_to_string(custom_path) {
+            if let Ok(creds) = serde_json::from_str::<CockpitCredentials>(&content) {
+                if let Some(res) = select_account_from_credentials(creds, preferred_account) {
+                    return Some(res);
+                }
+            }
             if let Ok(acct) = serde_json::from_str::<CockpitAccount>(&content) {
-                return Some(acct);
+                let email = acct.email.clone().unwrap_or_else(|| "custom_account".to_string());
+                return Some((acct, email));
             }
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
                 if let Some(token) = val["refresh_token"].as_str() {
-                    return Some(CockpitAccount {
-                        email: None,
+                    let email = val["email"].as_str().unwrap_or("custom_account").to_string();
+                    return Some((CockpitAccount {
+                        email: Some(email.clone()),
                         refresh_token: Some(token.to_string()),
                         access_token: None,
                         expires_at: None,
                         project_id: None,
-                    });
+                    }, email));
                 }
             }
         }
@@ -669,8 +728,8 @@ fn get_cached_antigravity_token(custom_path: &str) -> Option<CockpitAccount> {
         if let Ok(content) = fs::read_to_string(path) {
             // Try CockpitCredentials format
             if let Ok(creds) = serde_json::from_str::<CockpitCredentials>(&content) {
-                if let Some(acct) = creds.accounts.values().next() {
-                    return Some(acct.clone());
+                if let Some(res) = select_account_from_credentials(creds, preferred_account) {
+                    return Some(res);
                 }
             }
             // Try plain JSON with refresh_token / accessToken / refreshToken
@@ -695,14 +754,16 @@ fn get_cached_antigravity_token(custom_path: &str) -> Option<CockpitAccount> {
                     .or_else(|| val["projectId"].as_str())
                     .map(String::from);
 
+                let email = val["email"].as_str().unwrap_or("unknown_account").to_string();
+
                 if refresh_token.is_some() || access_token.is_some() {
-                    return Some(CockpitAccount {
-                        email: val["email"].as_str().map(String::from),
+                    return Some((CockpitAccount {
+                        email: Some(email.clone()),
                         refresh_token,
                         access_token,
                         expires_at,
                         project_id,
-                    });
+                    }, email));
                 }
             }
         }
@@ -713,7 +774,7 @@ fn get_cached_antigravity_token(custom_path: &str) -> Option<CockpitAccount> {
 
 // ─── Main fetch_quota ────────────────────────────────────────────────────────
 
-pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Client, config: &super::config::Config) -> Result<(Vec<super::config::QuotaPool>, String), String> {
+pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Client, config: &super::config::Config) -> Result<(Vec<super::config::QuotaPool>, String, Option<String>), String> {
     // Priority 1: Local Loopback Server legacy endpoint
     if let Ok(res) = client.get("http://localhost:8999/quota").send().await {
         if let Ok(body) = res.text().await {
@@ -724,21 +785,21 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
                     label: "Gemini".to_string(),
                     remaining_fraction: fraction,
                     reset_time: Some(data.quota.reset_time),
-                }], "local".to_string()));
+                }], "local".to_string(), None));
             } else if let Ok(data) = serde_json::from_str::<QuotaResponseDirect>(&body) {
                 let fraction = if data.total > 0 { (data.remaining as f64) / (data.total as f64) } else { 0.0 };
                 return Ok((vec![super::config::QuotaPool {
                     label: "Gemini".to_string(),
                     remaining_fraction: fraction,
                     reset_time: None,
-                }], "local".to_string()));
+                }], "local".to_string(), None));
             }
         }
     }
 
     // Priority 2: Direct local language server scraping
     match fetch_local_language_server_quota(local_client).await {
-        Ok(result) => return Ok(result),
+        Ok((pools, src)) => return Ok((pools, src, None)),
         Err(e) => append_debug_log!("Local scraper failed: {}", e),
     }
 
@@ -746,15 +807,17 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
     let mut access_token: Option<String> = None;
     let mut project_id: Option<String> = None;
     let mut refresh_token: Option<String> = None;
+    let mut active_email: Option<String> = None;
 
     // Check custom path override first
     if !config.refresh_token_override.is_empty() {
         refresh_token = Some(config.refresh_token_override.clone());
     } else {
         // Retrieve credentials from file
-        if let Some(acct) = get_cached_antigravity_token(&config.antigravity_config_path) {
+        if let Some((acct, email)) = get_cached_antigravity_token(&config.antigravity_config_path, &config.preferred_account) {
             refresh_token = acct.refresh_token;
             project_id = acct.project_id;
+            active_email = Some(email);
 
             if let (Some(token), Some(expiry_str)) = (acct.access_token, acct.expires_at) {
                 if let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(&expiry_str) {
@@ -768,9 +831,21 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
         }
     }
 
-    // Check in-memory CLOUD_CACHE if not using override
+    // Check in-memory CLOUD_CACHE if not using override & atomic email diff check under mutex lock
     if config.refresh_token_override.is_empty() {
-        let cache = get_cloud_cache().lock().await;
+        let mut cache = get_cloud_cache().lock().await;
+
+        if let Some(ref current_email) = active_email {
+            let is_email_changed = cache.cached_email.as_ref().map(|ce| ce != current_email).unwrap_or(false);
+            if is_email_changed {
+                append_debug_log!("Account email changed from {:?} to {}, invalidating cloud cache", cache.cached_email, current_email);
+                cache.access_token = None;
+                cache.expires_at = None;
+                cache.project_id = None;
+                cache.cached_email = Some(current_email.clone());
+            }
+        }
+
         if access_token.is_none() {
             if let (Some(token), Some(expiry)) = (&cache.access_token, cache.expires_at) {
                 let now = chrono::Utc::now();
@@ -810,11 +885,14 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
         
         access_token = Some(token_data.access_token);
         
-        // Cache refreshed access token in memory
+        // Cache refreshed access token in memory and sync cached_email
         let mut cache = get_cloud_cache().lock().await;
         cache.access_token = access_token.clone();
         // Assume access token is valid for 55 minutes
         cache.expires_at = Some(chrono::Utc::now() + chrono::Duration::minutes(55));
+        if let Some(ref current_email) = active_email {
+            cache.cached_email = Some(current_email.clone());
+        }
     }
 
     let access_token_str = access_token.as_ref().ok_or_else(|| "No access token".to_string())?;
@@ -934,7 +1012,7 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
     }
 
     if cloud_summary_success {
-        return Ok((cloud_pools_result, "cloud".to_string()));
+        return Ok((cloud_pools_result, "cloud".to_string(), active_email));
     }
 
     // Fallback to fetchAvailableModels
@@ -999,7 +1077,7 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
         return Err("No matching models found in cloud manual fallback".to_string());
     }
 
-    Ok((cloud_fallback_pools, "cloud".to_string()))
+    Ok((cloud_fallback_pools, "cloud".to_string(), active_email))
 }
 
 #[cfg(test)]

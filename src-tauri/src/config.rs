@@ -12,6 +12,10 @@ pub struct Config {
     pub position_corner: String, // "bottom-right", "bottom-left", "top-right", "top-left"
     pub reset_time_utc: String, // "HH:MM"
     pub autostart: bool,
+    #[serde(default)]
+    pub preferred_account: String,
+    #[serde(default)]
+    pub mask_account_email: bool,
 }
 
 impl Default for Config {
@@ -25,6 +29,8 @@ impl Default for Config {
             position_corner: "bottom-right".to_string(),
             reset_time_utc: "00:00".to_string(),
             autostart: true,
+            preferred_account: String::new(),
+            mask_account_email: false,
         }
     }
 }
@@ -44,6 +50,8 @@ pub struct Cache {
     #[serde(default)]
     pub error_reason: Option<String>,
     pub source: String,
+    #[serde(default)]
+    pub account_email: Option<String>,
 }
 
 impl Default for Cache {
@@ -54,6 +62,7 @@ impl Default for Cache {
             is_offline: true,
             error_reason: None,
             source: String::new(),
+            account_email: None,
         }
     }
 }

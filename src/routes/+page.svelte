@@ -16,6 +16,11 @@
     is_offline: boolean;
     error_reason?: string;
     source: string;
+    account_email?: string;
+  }
+
+  interface Config {
+    mask_account_email?: boolean;
   }
 
   let pools = $state<QuotaPool[]>([]);
@@ -23,6 +28,8 @@
   let errorReason = $state<string | undefined>(undefined);
   let lastUpdated = $state("");
   let source = $state("");
+  let accountEmail = $state<string | undefined>(undefined);
+  let maskAccountEmail = $state(false);
   let isLoading = $state(true);
 
   let now = $state(Date.now());
@@ -69,11 +76,32 @@
     return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h`;
   });
 
+  function formatEmail(email: string | undefined, mask: boolean): string {
+    if (!email) return "";
+    if (!mask) return email;
+    const parts = email.split("@");
+    if (parts.length !== 2) return email;
+    const name = parts[0];
+    const domain = parts[1];
+    if (name.length <= 2) {
+      return `${name}***@${domain}`;
+    }
+    return `${name.slice(0, 2)}***@${domain}`;
+  }
+
   onMount(() => {
     let unlistenQuota: (() => void) | undefined;
     let unlistenRefresh: (() => void) | undefined;
+    let unlistenConfig: (() => void) | undefined;
 
     const init = async () => {
+      try {
+        const cfg = await invoke<Config>("get_config");
+        maskAccountEmail = cfg.mask_account_email ?? false;
+      } catch (e) {
+        console.error("Failed to load config in page", e);
+      }
+
       try {
         const cache = await invoke<Cache>("get_current_quota");
         pools = cache.pools || [];
@@ -81,6 +109,7 @@
         errorReason = cache.error_reason;
         lastUpdated = cache.last_updated;
         source = cache.source;
+        accountEmail = cache.account_email;
       } catch (e) {
         console.error("Failed to load initial cache", e);
       } finally {
@@ -93,7 +122,12 @@
         errorReason = event.payload.error_reason;
         lastUpdated = event.payload.last_updated;
         source = event.payload.source;
+        accountEmail = event.payload.account_email;
         isLoading = false;
+      });
+
+      unlistenConfig = await listen<Config>("config-updated", (event) => {
+        maskAccountEmail = event.payload.mask_account_email ?? false;
       });
 
       unlistenRefresh = await listen("refresh-started", () => {
@@ -106,6 +140,7 @@
     return () => {
       if (unlistenQuota) unlistenQuota();
       if (unlistenRefresh) unlistenRefresh();
+      if (unlistenConfig) unlistenConfig();
     };
   });
 
@@ -230,7 +265,9 @@
   </div>
 
   <div class="row-bottom">
-    <span class="meta" id="quota-source">{isOffline ? "Offline" : source === "local" ? "Local" : "Cloud"}</span>
+    <span class="meta" id="quota-source">
+      {isOffline ? "Offline" : source === "local" ? "Local" : accountEmail ? `Cloud • ${formatEmail(accountEmail, maskAccountEmail)}` : "Cloud"}
+    </span>
     <span class="meta" id="quota-time-ago">{timeAgo}</span>
   </div>
 </main>
