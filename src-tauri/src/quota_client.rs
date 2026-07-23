@@ -632,10 +632,13 @@ fn select_account_from_credentials(creds: CockpitCredentials, preferred_account:
     }).collect();
 
     // Priority 1: Check preferred_account match
-    if !preferred_account.is_empty() {
+    if !preferred_account.trim().is_empty() {
         let pref_lower = preferred_account.trim().to_lowercase();
         if let Some((acct, email)) = accounts_with_email.iter().find(|(_, email)| email.to_lowercase() == pref_lower) {
+            append_debug_log!("Found matching preferred account: {}", email);
             return Some((acct.clone(), email.clone()));
+        } else {
+            append_debug_log!("Preferred account '{}' not found in credentials.json accounts, falling back to auto-selection", preferred_account.trim());
         }
     }
 
