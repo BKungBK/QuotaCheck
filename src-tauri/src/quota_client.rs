@@ -28,6 +28,7 @@ struct TokenResponse {
     access_token: String,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 struct CloudQuotaInfo {
     #[serde(default, rename = "remainingFraction")]
@@ -36,6 +37,7 @@ struct CloudQuotaInfo {
     reset_time: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct CloudModelConfig {
     #[serde(default, rename = "quotaInfo")]
@@ -46,6 +48,7 @@ struct CloudModelConfig {
     is_internal: Option<bool>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 struct FetchAvailableModelsResponse {
     #[serde(default)]
@@ -148,10 +151,33 @@ struct UserStatusResponse {
     user_status: Option<UserStatusDetail>,
 }
 
+#[allow(dead_code)]
+#[derive(Deserialize, Debug, Clone)]
+struct QuotaBucket {
+    #[serde(default, rename = "bucketId")]
+    bucket_id: Option<String>,
+    #[serde(default, rename = "displayName")]
+    display_name: Option<String>,
+    #[serde(default, rename = "remainingFraction")]
+    remaining_fraction: Option<f64>,
+    #[serde(default, rename = "resetTime")]
+    reset_time: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct QuotaGroup {
+    #[serde(default, rename = "displayName")]
+    display_name: Option<String>,
+    #[serde(default)]
+    buckets: Vec<QuotaBucket>,
+}
+
 #[derive(Deserialize, Debug, Default)]
 struct RetrieveUserQuotaSummaryResponse {
     #[serde(default)]
     pools: Option<Vec<BackendQuotaPool>>,
+    #[serde(default)]
+    groups: Option<Vec<QuotaGroup>>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -979,101 +1005,9 @@ async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config::Con
         None => serde_json::json!({}),
     };
 
-    let mut cloud_models_success = false;
-    let mut cloud_pools_result = Vec::new();
+    append_debug_log!("--- retrieveUserQuotaSummary cloud path start ---");
 
-    append_debug_log!("--- fetchAvailableModels cloud path start ---");
-
-    // Primary: Call fetchAvailableModels (matches IDE Settings -> Models UI)
-    let quota_res_models = client
-        .post("https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels")
-        .bearer_auth(access_token_str)
-        .header("User-Agent", "antigravity/1.104.0 windows/amd64")
-        .header("Client-Metadata", "{\"ideType\":\"ANTIGRAVITY\",\"platform\":\"WINDOWS\",\"pluginType\":\"GEMINI\"}")
-        .json(&req_body)
-        .send()
-        .await;
-
-    match quota_res_models {
-        Ok(resp) => {
-            let status = resp.status();
-            append_debug_log!("fetchAvailableModels HTTP status: {}", status);
-            if status.is_success() {
-                if let Ok(quota_res_data) = resp.json::<FetchAvailableModelsResponse>().await {
-                    append_debug_log!("fetchAvailableModels parsed successfully, model count: {}", quota_res_data.models.len());
-
-                    let mut gemini_min: Option<(f64, Option<String>)> = None;
-                    let mut claude_min: Option<(f64, Option<String>)> = None;
-
-                    for (k, v) in quota_res_data.models {
-                        if v.is_internal.unwrap_or(false) {
-                            continue;
-                        }
-                        let label_lower = k.to_lowercase();
-                        let display_lower = v.display_name.as_ref().map(|d| d.to_lowercase()).unwrap_or_default();
-
-                        // Skip utility, image, and tab/chat models
-                        if label_lower.contains("image") || display_lower.contains("image")
-                            || label_lower.starts_with("tab_") || label_lower.starts_with("chat_") {
-                            continue;
-                        }
-
-                        if let Some(ref q) = v.quota_info {
-                            if let Some(rem_frac) = q.remaining_fraction {
-                                let reset = q.reset_time.clone();
-                                if label_lower.contains("gemini") || display_lower.contains("gemini") {
-                                    if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                                        gemini_min = Some((rem_frac, reset));
-                                    }
-                                } else if label_lower.contains("claude") || display_lower.contains("claude") || label_lower.contains("gpt-oss") || display_lower.contains("gpt-oss") {
-                                    if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                                        claude_min = Some((rem_frac, reset));
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    append_debug_log!("fetchAvailableModels min calculation: gemini_min={:?}, claude_min={:?}", gemini_min, claude_min);
-
-                    if let Some((frac, reset)) = gemini_min {
-                        cloud_pools_result.push(super::config::QuotaPool {
-                            label: "Gemini".to_string(),
-                            remaining_fraction: frac,
-                            reset_time: reset,
-                        });
-                    }
-                    if let Some((frac, reset)) = claude_min {
-                        cloud_pools_result.push(super::config::QuotaPool {
-                            label: "Claude".to_string(),
-                            remaining_fraction: frac,
-                            reset_time: reset,
-                        });
-                    }
-
-                    if !cloud_pools_result.is_empty() {
-                        cloud_models_success = true;
-                        append_debug_log!("fetchAvailableModels succeeded with {} pools", cloud_pools_result.len());
-                    } else {
-                        append_debug_log!("fetchAvailableModels fallback trigger: 0 model match (no matching gemini or claude pools)");
-                    }
-                } else {
-                    append_debug_log!("fetchAvailableModels fallback trigger: JSON parse fail");
-                }
-            } else {
-                append_debug_log!("fetchAvailableModels fallback trigger: HTTP status non-success {}", status);
-            }
-        }
-        Err(e) => {
-            append_debug_log!("fetchAvailableModels fallback trigger: request fail: {}", e);
-        }
-    }
-
-    if cloud_models_success {
-        return Ok((cloud_pools_result, "cloud".to_string(), active_email));
-    }
-
-    // Fallback: Call retrieveUserQuotaSummary
+    // Primary Cloud Source: Call retrieveUserQuotaSummary (dynamic rate limits from Cloud API)
     let quota_res_summary = client
         .post("https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary")
         .bearer_auth(access_token_str)
@@ -1084,24 +1018,64 @@ async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config::Con
         .await;
 
     if let Ok(resp) = quota_res_summary {
-        if resp.status().is_success() {
+        let status = resp.status();
+        append_debug_log!("retrieveUserQuotaSummary HTTP status: {}", status);
+        if status.is_success() {
             if let Ok(body) = resp.text().await {
                 if let Ok(parsed) = serde_json::from_str::<RetrieveUserQuotaSummaryResponse>(&body) {
-                    if let Some(pools) = parsed.pools {
-                        let mut summary_pools = Vec::new();
-                        for p in pools {
-                            if let (Some(lbl), Some(rem)) = (p.label, p.remaining_fraction) {
-                                summary_pools.push(super::config::QuotaPool {
-                                    label: lbl,
-                                    remaining_fraction: rem,
-                                    reset_time: p.reset_time,
-                                });
+                    let mut summary_pools = Vec::new();
+
+                    // Parse groups (e.g. Gemini Models, Claude and GPT models)
+                    if let Some(groups) = parsed.groups {
+                        for g in groups {
+                            let g_name = g.display_name.as_deref().unwrap_or("").to_lowercase();
+                            let is_gemini = g_name.contains("gemini");
+                            let is_claude = g_name.contains("claude") || g_name.contains("gpt") || g_name.contains("3p");
+
+                            if is_gemini || is_claude {
+                                let label = if is_gemini { "Gemini" } else { "Claude" };
+                                let mut min_bucket: Option<(f64, Option<String>)> = None;
+
+                                for b in g.buckets {
+                                    if let Some(rem) = b.remaining_fraction {
+                                        if min_bucket.as_ref().map(|(m, _)| rem < *m).unwrap_or(true) {
+                                            min_bucket = Some((rem, b.reset_time));
+                                        }
+                                    }
+                                }
+
+                                if let Some((rem, reset)) = min_bucket {
+                                    summary_pools.push(super::config::QuotaPool {
+                                        label: label.to_string(),
+                                        remaining_fraction: rem,
+                                        reset_time: reset,
+                                    });
+                                }
                             }
                         }
-                        if !summary_pools.is_empty() {
-                            return Ok((summary_pools, "cloud".to_string(), active_email));
+                    }
+
+                    // Fallback to legacy pools array if groups was empty
+                    if summary_pools.is_empty() {
+                        if let Some(pools) = parsed.pools {
+                            for p in pools {
+                                if let (Some(lbl), Some(rem)) = (p.label, p.remaining_fraction) {
+                                    summary_pools.push(super::config::QuotaPool {
+                                        label: lbl,
+                                        remaining_fraction: rem,
+                                        reset_time: p.reset_time,
+                                    });
+                                }
+                            }
                         }
                     }
+
+                    if !summary_pools.is_empty() {
+                        append_debug_log!("retrieveUserQuotaSummary succeeded with {} pools", summary_pools.len());
+                        return Ok((summary_pools, "cloud".to_string(), active_email));
+                    }
+                } else {
+                    append_debug_log!("retrieveUserQuotaSummary JSON parse fail");
                 }
             }
         }
