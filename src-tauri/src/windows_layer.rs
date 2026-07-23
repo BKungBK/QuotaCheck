@@ -297,7 +297,7 @@ pub async fn setup_with_retry(window: &WebviewWindow) {
 
 pub fn init_wallpaper_widget(window: WebviewWindow) {
     let (tx, mut rx) = mpsc::channel::<()>(5);
-    let _ = REPOSITION_TX.set(tx);
+    let _ = REPOSITION_TX.set(tx.clone());
 
     let window_clone = window.clone();
     tauri::async_runtime::spawn(async move {
@@ -315,6 +315,25 @@ pub fn init_wallpaper_widget(window: WebviewWindow) {
                         SetWindowLongPtrW(hwnd, GWLP_WNDPROC, wallpaper_wndproc as *const () as isize);
                     }
                 }
+            }
+        });
+
+        // Watchdog task: reassert Z-order/position periodically to prevent other wallpaper apps (e.g. Lively Wallpaper) from stealing Z-order
+        let tx_watchdog = tx.clone();
+        tauri::async_runtime::spawn(async move {
+            // Boot phase (first 2 mins): 5s interval to minimize flicker/race when wallpaper apps auto-start at login
+            let start = std::time::Instant::now();
+            let mut boot_tick = tokio::time::interval(std::time::Duration::from_secs(5));
+            while start.elapsed() < std::time::Duration::from_secs(120) {
+                boot_tick.tick().await;
+                let _ = tx_watchdog.try_send(());
+            }
+
+            // Normal phase: 20s interval
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(20));
+            loop {
+                tick.tick().await;
+                let _ = tx_watchdog.try_send(());
             }
         });
 
