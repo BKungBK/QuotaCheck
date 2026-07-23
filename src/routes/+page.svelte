@@ -165,23 +165,6 @@
     }
     return raw;
   }
-
-  function getFractionText(label: string, fraction: number): string {
-    const l = label.toLowerCase();
-    if (l.startsWith("claude")) {
-      const total = 500;
-      const current = Math.round(fraction * total);
-      return `${current} / ${total} requests`;
-    }
-    if (l.startsWith("gemini")) {
-      const total = 200;
-      const current = Math.round(fraction * total);
-      return `${current} / ${total} credits`;
-    }
-    const total = 100;
-    const current = Math.round(fraction * total);
-    return `${current} / ${total}`;
-  }
 </script>
 
 <main
@@ -247,12 +230,11 @@
               style="width: {isOffline ? 0 : pool.remaining_fraction * 100}%; background: {barColor(pool.remaining_fraction)}"
             ></div>
           </div>
-          <div class="sub-row">
-            <span class="sub-meta">{getFractionText(pool.label, pool.remaining_fraction)}</span>
-            {#if resetText}
+          {#if resetText}
+            <div class="sub-row">
               <span class="sub-meta">reset {resetText}</span>
-            {/if}
-          </div>
+            </div>
+          {/if}
         </div>
       {:else}
         <div class="no-pools" id="no-pools-placeholder">
@@ -459,7 +441,7 @@
 
   .sub-row {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
   }
   .sub-meta {

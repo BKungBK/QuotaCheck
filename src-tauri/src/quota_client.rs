@@ -461,10 +461,105 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
         }
     });
 
-    let mut retrieve_summary_success = false;
-    let mut pools_result = Vec::new();
+    let mut local_status_success = false;
+    let mut local_pools_result = Vec::new();
 
-    append_debug_log!("Calling RetrieveUserQuotaSummary at {}", base_url);
+    append_debug_log!("Calling GetUserStatus at {}", base_url);
+
+    let res_status = if let Some(ref ext_csrf) = info.extension_server_csrf_token {
+        let r = local_client.post(&format!("{}/GetUserStatus", base_url))
+            .header("Connect-Protocol-Version", "1")
+            .header("X-Codeium-Csrf-Token", ext_csrf)
+            .json(&meta)
+            .send()
+            .await;
+        match r {
+            Ok(resp) if resp.status().is_success() => Ok(resp),
+            _ => {
+                append_debug_log!("Extension CSRF failed for GetUserStatus, retrying with main CSRF");
+                local_client.post(&format!("{}/GetUserStatus", base_url))
+                    .header("Connect-Protocol-Version", "1")
+                    .header("X-Codeium-Csrf-Token", &info.csrf_token)
+                    .json(&meta)
+                    .send()
+                    .await
+            }
+        }
+    } else {
+        local_client.post(&format!("{}/GetUserStatus", base_url))
+            .header("Connect-Protocol-Version", "1")
+            .header("X-Codeium-Csrf-Token", &info.csrf_token)
+            .json(&meta)
+            .send()
+            .await
+    };
+
+    if let Ok(resp) = res_status {
+        if resp.status().is_success() {
+            if let Ok(body) = resp.text().await {
+                if let Ok(status_resp) = serde_json::from_str::<UserStatusResponse>(&body) {
+                    let configs = status_resp.user_status
+                        .and_then(|us| us.cascade_model_config_data)
+                        .map(|d| d.client_model_configs)
+                        .unwrap_or_default();
+
+                    let mut gemini_min: Option<(f64, Option<String>)> = None;
+                    let mut claude_min: Option<(f64, Option<String>)> = None;
+
+                    for c in configs {
+                        let label_lower = c.label.to_lowercase();
+                        if let Some(ref q) = c.quota_info {
+                            if let Some(rem_frac) = q.remaining_fraction {
+                                let reset = q.reset_time.clone();
+                                if label_lower.starts_with("gemini") {
+                                    if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
+                                        gemini_min = Some((rem_frac, reset));
+                                    }
+                                } else if label_lower.starts_with("claude") || label_lower.starts_with("gpt-oss") {
+                                    if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
+                                        claude_min = Some((rem_frac, reset));
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some((frac, reset)) = gemini_min {
+                        local_pools_result.push(super::config::QuotaPool {
+                            label: "Gemini".to_string(),
+                            remaining_fraction: frac,
+                            reset_time: reset,
+                        });
+                    }
+                    if let Some((frac, reset)) = claude_min {
+                        local_pools_result.push(super::config::QuotaPool {
+                            label: "Claude".to_string(),
+                            remaining_fraction: frac,
+                            reset_time: reset,
+                        });
+                    }
+
+                    if !local_pools_result.is_empty() {
+                        local_status_success = true;
+                        append_debug_log!("Successfully parsed GetUserStatus with {} pools", local_pools_result.len());
+                    }
+                } else {
+                    append_debug_log!("Failed to parse UserStatusResponse json");
+                }
+            }
+        } else {
+            append_debug_log!("GetUserStatus returned non-200: {}", resp.status());
+        }
+    } else {
+        append_debug_log!("GetUserStatus request failed");
+    }
+
+    if local_status_success {
+        return Ok((local_pools_result, "local".to_string()));
+    }
+
+    // Fallback: RetrieveUserQuotaSummary
+    append_debug_log!("Falling back to RetrieveUserQuotaSummary");
 
     let res_summary = if let Some(ref ext_csrf) = info.extension_server_csrf_token {
         let r = local_client.post(&format!("{}/RetrieveUserQuotaSummary", base_url))
@@ -476,7 +571,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
         match r {
             Ok(resp) if resp.status().is_success() => Ok(resp),
             _ => {
-                append_debug_log!("Extension CSRF failed for RetrieveUserQuotaSummary, retrying with main CSRF");
+                append_debug_log!("Extension CSRF failed or rejected for RetrieveUserQuotaSummary, retrying with main CSRF");
                 local_client.post(&format!("{}/RetrieveUserQuotaSummary", base_url))
                     .header("Connect-Protocol-Version", "1")
                     .header("X-Codeium-Csrf-Token", &info.csrf_token)
@@ -499,124 +594,26 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client) -> Re
             if let Ok(body) = resp.text().await {
                 if let Ok(parsed) = serde_json::from_str::<RetrieveUserQuotaSummaryResponse>(&body) {
                     if let Some(pools) = parsed.pools {
-                        if !pools.is_empty() {
-                            for p in pools {
-                                if let (Some(lbl), Some(rem)) = (p.label, p.remaining_fraction) {
-                                    pools_result.push(super::config::QuotaPool {
-                                        label: lbl,
-                                        remaining_fraction: rem,
-                                        reset_time: p.reset_time,
-                                    });
-                                }
-                            }
-                            if !pools_result.is_empty() {
-                                retrieve_summary_success = true;
-                                append_debug_log!("Successfully parsed RetrieveUserQuotaSummary with {} pools", pools_result.len());
+                        let mut summary_pools = Vec::new();
+                        for p in pools {
+                            if let (Some(lbl), Some(rem)) = (p.label, p.remaining_fraction) {
+                                summary_pools.push(super::config::QuotaPool {
+                                    label: lbl,
+                                    remaining_fraction: rem,
+                                    reset_time: p.reset_time,
+                                });
                             }
                         }
-                    }
-                } else {
-                    append_debug_log!("Failed to parse RetrieveUserQuotaSummaryResponse json");
-                }
-            }
-        } else {
-            append_debug_log!("RetrieveUserQuotaSummary returned non-200: {}", resp.status());
-        }
-    } else {
-        append_debug_log!("RetrieveUserQuotaSummary request failed");
-    }
-
-    if retrieve_summary_success {
-        return Ok((pools_result, "local".to_string()));
-    }
-
-    // Fallback: query GetUserStatus and merge manually
-    append_debug_log!("Falling back to GetUserStatus with manual merging");
-    
-    let res_status = if let Some(ref ext_csrf) = info.extension_server_csrf_token {
-        let r = local_client.post(&format!("{}/GetUserStatus", base_url))
-            .header("Connect-Protocol-Version", "1")
-            .header("X-Codeium-Csrf-Token", ext_csrf)
-            .json(&meta)
-            .send()
-            .await;
-        match r {
-            Ok(resp) if resp.status().is_success() => Ok(resp),
-            _ => {
-                append_debug_log!("Extension CSRF failed or rejected, retrying with main CSRF");
-                local_client.post(&format!("{}/GetUserStatus", base_url))
-                    .header("Connect-Protocol-Version", "1")
-                    .header("X-Codeium-Csrf-Token", &info.csrf_token)
-                    .json(&meta)
-                    .send()
-                    .await
-            }
-        }
-    } else {
-        local_client.post(&format!("{}/GetUserStatus", base_url))
-            .header("Connect-Protocol-Version", "1")
-            .header("X-Codeium-Csrf-Token", &info.csrf_token)
-            .json(&meta)
-            .send()
-            .await
-    }.map_err(|e| { append_debug_log!("Request error: {}", e); format!("GetUserStatus request failed: {}", e) })?;
-
-    let status = res_status.status();
-    if !status.is_success() {
-        return Err(format!("GetUserStatus returned error: {}", status));
-    }
-
-    let body = res_status.text().await.map_err(|e| format!("Failed to read body: {}", e))?;
-    let status_resp: UserStatusResponse = serde_json::from_str(&body)
-        .map_err(|e| { append_debug_log!("JSON parse error: {}", e); format!("Failed to parse response: {}", e) })?;
-
-    let configs = status_resp.user_status
-        .and_then(|us| us.cascade_model_config_data)
-        .map(|d| d.client_model_configs)
-        .unwrap_or_default();
-
-    let mut gemini_min: Option<(f64, Option<String>)> = None;
-    let mut claude_min: Option<(f64, Option<String>)> = None;
-
-    for c in configs {
-        let label_lower = c.label.to_lowercase();
-        if let Some(ref q) = c.quota_info {
-            if let Some(rem_frac) = q.remaining_fraction {
-                let reset = q.reset_time.clone();
-                if label_lower.starts_with("gemini") {
-                    if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                        gemini_min = Some((rem_frac, reset));
-                    }
-                } else if label_lower.starts_with("claude") || label_lower.starts_with("gpt-oss") {
-                    if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                        claude_min = Some((rem_frac, reset));
+                        if !summary_pools.is_empty() {
+                            return Ok((summary_pools, "local".to_string()));
+                        }
                     }
                 }
             }
         }
     }
 
-    let mut fallback_pools = Vec::new();
-    if let Some((frac, reset)) = gemini_min {
-        fallback_pools.push(super::config::QuotaPool {
-            label: "Gemini".to_string(),
-            remaining_fraction: frac,
-            reset_time: reset,
-        });
-    }
-    if let Some((frac, reset)) = claude_min {
-        fallback_pools.push(super::config::QuotaPool {
-            label: "Claude".to_string(),
-            remaining_fraction: frac,
-            reset_time: reset,
-        });
-    }
-
-    if fallback_pools.is_empty() {
-        return Err("No matching models found in manual fallback".to_string());
-    }
-
-    Ok((fallback_pools, "local".to_string()))
+    Err("Failed to fetch quota from local language server endpoints".to_string())
 }
 
 // ─── Token retrieval for cloud fallback ──────────────────────────────────────
@@ -976,10 +973,71 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
         None => serde_json::json!({}),
     };
 
-    let mut cloud_summary_success = false;
+    let mut cloud_models_success = false;
     let mut cloud_pools_result = Vec::new();
 
-    // Call retrieveUserQuotaSummary
+    // Primary: Call fetchAvailableModels (matches IDE Settings -> Models UI)
+    let quota_res_models = client
+        .post("https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels")
+        .bearer_auth(access_token_str)
+        .header("User-Agent", "antigravity/1.104.0 windows/amd64")
+        .header("Client-Metadata", "{\"ideType\":\"ANTIGRAVITY\",\"platform\":\"WINDOWS\",\"pluginType\":\"GEMINI\"}")
+        .json(&req_body)
+        .send()
+        .await;
+
+    if let Ok(resp) = quota_res_models {
+        if resp.status().is_success() {
+            if let Ok(quota_res_data) = resp.json::<FetchAvailableModelsResponse>().await {
+                let mut gemini_min: Option<(f64, Option<String>)> = None;
+                let mut claude_min: Option<(f64, Option<String>)> = None;
+
+                for (k, v) in quota_res_data.models {
+                    let label_lower = k.to_lowercase();
+                    let display_lower = v.display_name.as_ref().map(|d| d.to_lowercase()).unwrap_or_default();
+                    if let Some(ref q) = v.quota_info {
+                        if let Some(rem_frac) = q.remaining_fraction {
+                            let reset = q.reset_time.clone();
+                            if label_lower.contains("gemini") || display_lower.contains("gemini") {
+                                if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
+                                    gemini_min = Some((rem_frac, reset));
+                                }
+                            } else if label_lower.contains("claude") || display_lower.contains("claude") || label_lower.contains("gpt-oss") || display_lower.contains("gpt-oss") {
+                                if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
+                                    claude_min = Some((rem_frac, reset));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Some((frac, reset)) = gemini_min {
+                    cloud_pools_result.push(super::config::QuotaPool {
+                        label: "Gemini".to_string(),
+                        remaining_fraction: frac,
+                        reset_time: reset,
+                    });
+                }
+                if let Some((frac, reset)) = claude_min {
+                    cloud_pools_result.push(super::config::QuotaPool {
+                        label: "Claude".to_string(),
+                        remaining_fraction: frac,
+                        reset_time: reset,
+                    });
+                }
+
+                if !cloud_pools_result.is_empty() {
+                    cloud_models_success = true;
+                }
+            }
+        }
+    }
+
+    if cloud_models_success {
+        return Ok((cloud_pools_result, "cloud".to_string(), active_email));
+    }
+
+    // Fallback: Call retrieveUserQuotaSummary
     let quota_res_summary = client
         .post("https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary")
         .bearer_auth(access_token_str)
@@ -994,19 +1052,18 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
             if let Ok(body) = resp.text().await {
                 if let Ok(parsed) = serde_json::from_str::<RetrieveUserQuotaSummaryResponse>(&body) {
                     if let Some(pools) = parsed.pools {
-                        if !pools.is_empty() {
-                            for p in pools {
-                                if let (Some(lbl), Some(rem)) = (p.label, p.remaining_fraction) {
-                                    cloud_pools_result.push(super::config::QuotaPool {
-                                        label: lbl,
-                                        remaining_fraction: rem,
-                                        reset_time: p.reset_time,
-                                    });
-                                }
+                        let mut summary_pools = Vec::new();
+                        for p in pools {
+                            if let (Some(lbl), Some(rem)) = (p.label, p.remaining_fraction) {
+                                summary_pools.push(super::config::QuotaPool {
+                                    label: lbl,
+                                    remaining_fraction: rem,
+                                    reset_time: p.reset_time,
+                                });
                             }
-                            if !cloud_pools_result.is_empty() {
-                                cloud_summary_success = true;
-                            }
+                        }
+                        if !summary_pools.is_empty() {
+                            return Ok((summary_pools, "cloud".to_string(), active_email));
                         }
                     }
                 }
@@ -1014,73 +1071,7 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
         }
     }
 
-    if cloud_summary_success {
-        return Ok((cloud_pools_result, "cloud".to_string(), active_email));
-    }
-
-    // Fallback to fetchAvailableModels
-    let quota_res = client
-        .post("https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels")
-        .bearer_auth(access_token_str)
-        .header("User-Agent", "antigravity/1.104.0 windows/amd64")
-        .header("Client-Metadata", "{\"ideType\":\"ANTIGRAVITY\",\"platform\":\"WINDOWS\",\"pluginType\":\"GEMINI\"}")
-        .json(&req_body)
-        .send()
-        .await
-        .map_err(|e| format!("Quota request failed: {}", e))?;
-
-    if !quota_res.status().is_success() {
-        let status = quota_res.status();
-        let body = quota_res.text().await.unwrap_or_default();
-        return Err(format!("Quota API returned error ({}): {}", status, body));
-    }
-
-    let quota_res_data: FetchAvailableModelsResponse = quota_res.json().await
-        .map_err(|e| format!("Failed to parse quota response: {}", e))?;
-
-    let mut gemini_min: Option<(f64, Option<String>)> = None;
-    let mut claude_min: Option<(f64, Option<String>)> = None;
-
-    for (k, v) in quota_res_data.models {
-        let label_lower = k.to_lowercase();
-        let display_lower = v.display_name.as_ref().map(|d| d.to_lowercase()).unwrap_or_default();
-        if let Some(ref q) = v.quota_info {
-            if let Some(rem_frac) = q.remaining_fraction {
-                let reset = q.reset_time.clone();
-                if label_lower.contains("gemini") || display_lower.contains("gemini") {
-                    if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                        gemini_min = Some((rem_frac, reset));
-                    }
-                } else if label_lower.contains("claude") || display_lower.contains("claude") || label_lower.contains("gpt-oss") || display_lower.contains("gpt-oss") {
-                    if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                        claude_min = Some((rem_frac, reset));
-                    }
-                }
-            }
-        }
-    }
-
-    let mut cloud_fallback_pools = Vec::new();
-    if let Some((frac, reset)) = gemini_min {
-        cloud_fallback_pools.push(super::config::QuotaPool {
-            label: "Gemini".to_string(),
-            remaining_fraction: frac,
-            reset_time: reset,
-        });
-    }
-    if let Some((frac, reset)) = claude_min {
-        cloud_fallback_pools.push(super::config::QuotaPool {
-            label: "Claude".to_string(),
-            remaining_fraction: frac,
-            reset_time: reset,
-        });
-    }
-
-    if cloud_fallback_pools.is_empty() {
-        return Err("No matching models found in cloud manual fallback".to_string());
-    }
-
-    Ok((cloud_fallback_pools, "cloud".to_string(), active_email))
+    Err("Failed to fetch quota from cloud API endpoints".to_string())
 }
 
 #[cfg(test)]
