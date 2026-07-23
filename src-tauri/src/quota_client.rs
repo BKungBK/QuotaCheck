@@ -42,6 +42,8 @@ struct CloudModelConfig {
     quota_info: Option<CloudQuotaInfo>,
     #[serde(default, rename = "displayName")]
     display_name: Option<String>,
+    #[serde(default, rename = "isInternal")]
+    is_internal: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -804,6 +806,10 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
     }
 
     // Priority 3: Cloud OAuth fallback
+    fetch_cloud_quota(client, config).await
+}
+
+async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config::Config) -> Result<(Vec<super::config::QuotaPool>, String, Option<String>), String> {
     let mut access_token: Option<String> = None;
     let mut project_id: Option<String> = None;
     let mut refresh_token: Option<String> = None;
@@ -976,6 +982,8 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
     let mut cloud_models_success = false;
     let mut cloud_pools_result = Vec::new();
 
+    append_debug_log!("--- fetchAvailableModels cloud path start ---");
+
     // Primary: Call fetchAvailableModels (matches IDE Settings -> Models UI)
     let quota_res_models = client
         .post("https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels")
@@ -986,50 +994,78 @@ pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Clien
         .send()
         .await;
 
-    if let Ok(resp) = quota_res_models {
-        if resp.status().is_success() {
-            if let Ok(quota_res_data) = resp.json::<FetchAvailableModelsResponse>().await {
-                let mut gemini_min: Option<(f64, Option<String>)> = None;
-                let mut claude_min: Option<(f64, Option<String>)> = None;
+    match quota_res_models {
+        Ok(resp) => {
+            let status = resp.status();
+            append_debug_log!("fetchAvailableModels HTTP status: {}", status);
+            if status.is_success() {
+                if let Ok(quota_res_data) = resp.json::<FetchAvailableModelsResponse>().await {
+                    append_debug_log!("fetchAvailableModels parsed successfully, model count: {}", quota_res_data.models.len());
 
-                for (k, v) in quota_res_data.models {
-                    let label_lower = k.to_lowercase();
-                    let display_lower = v.display_name.as_ref().map(|d| d.to_lowercase()).unwrap_or_default();
-                    if let Some(ref q) = v.quota_info {
-                        if let Some(rem_frac) = q.remaining_fraction {
-                            let reset = q.reset_time.clone();
-                            if label_lower.contains("gemini") || display_lower.contains("gemini") {
-                                if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                                    gemini_min = Some((rem_frac, reset));
-                                }
-                            } else if label_lower.contains("claude") || display_lower.contains("claude") || label_lower.contains("gpt-oss") || display_lower.contains("gpt-oss") {
-                                if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                                    claude_min = Some((rem_frac, reset));
+                    let mut gemini_min: Option<(f64, Option<String>)> = None;
+                    let mut claude_min: Option<(f64, Option<String>)> = None;
+
+                    for (k, v) in quota_res_data.models {
+                        if v.is_internal.unwrap_or(false) {
+                            continue;
+                        }
+                        let label_lower = k.to_lowercase();
+                        let display_lower = v.display_name.as_ref().map(|d| d.to_lowercase()).unwrap_or_default();
+
+                        // Skip utility, image, and tab/chat models
+                        if label_lower.contains("image") || display_lower.contains("image")
+                            || label_lower.starts_with("tab_") || label_lower.starts_with("chat_") {
+                            continue;
+                        }
+
+                        if let Some(ref q) = v.quota_info {
+                            if let Some(rem_frac) = q.remaining_fraction {
+                                let reset = q.reset_time.clone();
+                                if label_lower.contains("gemini") || display_lower.contains("gemini") {
+                                    if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
+                                        gemini_min = Some((rem_frac, reset));
+                                    }
+                                } else if label_lower.contains("claude") || display_lower.contains("claude") || label_lower.contains("gpt-oss") || display_lower.contains("gpt-oss") {
+                                    if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
+                                        claude_min = Some((rem_frac, reset));
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                if let Some((frac, reset)) = gemini_min {
-                    cloud_pools_result.push(super::config::QuotaPool {
-                        label: "Gemini".to_string(),
-                        remaining_fraction: frac,
-                        reset_time: reset,
-                    });
-                }
-                if let Some((frac, reset)) = claude_min {
-                    cloud_pools_result.push(super::config::QuotaPool {
-                        label: "Claude".to_string(),
-                        remaining_fraction: frac,
-                        reset_time: reset,
-                    });
-                }
+                    append_debug_log!("fetchAvailableModels min calculation: gemini_min={:?}, claude_min={:?}", gemini_min, claude_min);
 
-                if !cloud_pools_result.is_empty() {
-                    cloud_models_success = true;
+                    if let Some((frac, reset)) = gemini_min {
+                        cloud_pools_result.push(super::config::QuotaPool {
+                            label: "Gemini".to_string(),
+                            remaining_fraction: frac,
+                            reset_time: reset,
+                        });
+                    }
+                    if let Some((frac, reset)) = claude_min {
+                        cloud_pools_result.push(super::config::QuotaPool {
+                            label: "Claude".to_string(),
+                            remaining_fraction: frac,
+                            reset_time: reset,
+                        });
+                    }
+
+                    if !cloud_pools_result.is_empty() {
+                        cloud_models_success = true;
+                        append_debug_log!("fetchAvailableModels succeeded with {} pools", cloud_pools_result.len());
+                    } else {
+                        append_debug_log!("fetchAvailableModels fallback trigger: 0 model match (no matching gemini or claude pools)");
+                    }
+                } else {
+                    append_debug_log!("fetchAvailableModels fallback trigger: JSON parse fail");
                 }
+            } else {
+                append_debug_log!("fetchAvailableModels fallback trigger: HTTP status non-success {}", status);
             }
+        }
+        Err(e) => {
+            append_debug_log!("fetchAvailableModels fallback trigger: request fail: {}", e);
         }
     }
 
@@ -1090,5 +1126,15 @@ mod tests {
         let res = fetch_quota(&client, &local_client, &config).await;
         println!("FETCH QUOTA RESULT: {:?}", res);
         assert!(res.is_ok(), "Expected fetch_quota to succeed, got: {:?}", res);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_cloud_quota_only() {
+        let config = crate::config::Config::default();
+        let client = reqwest::Client::new();
+        let res = fetch_cloud_quota(&client, &config).await;
+        println!("FETCH CLOUD QUOTA RESULT: {:?}", res);
+        assert!(res.is_ok(), "Expected fetch_cloud_quota to succeed, got: {:?}", res);
     }
 }
