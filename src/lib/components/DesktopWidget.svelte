@@ -230,7 +230,7 @@
     width: 100vw;
     height: 100vh;
     box-sizing: border-box;
-    padding: 16px;
+    padding: 12px 14px;
     background: var(--color-bg);
     border-radius: 0px;
     font-family: "Inter", system-ui, -apple-system, sans-serif;
@@ -240,13 +240,14 @@
     justify-content: space-between;
     user-select: none;
     pointer-events: auto;
+    overflow: hidden;
   }
 
   .row-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
 
   .header-left { display: flex; align-items: center; gap: 8px; }
@@ -315,11 +316,16 @@
   .pools-container {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     flex-grow: 1;
     justify-content: flex-start;
-    margin: 12px 0;
+    margin: 6px 0;
     overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .pools-container::-webkit-scrollbar {
+    display: none;
   }
 
   .no-pools {

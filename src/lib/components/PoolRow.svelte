@@ -36,8 +36,8 @@
   .pool-row {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 12px;
+    gap: 4px;
+    padding: 8px 10px;
     background: oklch(20% 0 0 / 0.5);
     border: 1px solid oklch(26% 0 0 / 0.6);
     border-radius: 8px;
@@ -59,9 +59,9 @@
   }
   .bar-track {
     width: 100%;
-    height: 8px;
+    height: 6px;
     background: var(--color-bar-track);
-    border-radius: 6px;
+    border-radius: 4px;
     overflow: hidden;
   }
   .bar-fill {
