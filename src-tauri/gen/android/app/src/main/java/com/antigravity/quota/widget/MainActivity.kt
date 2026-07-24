@@ -7,10 +7,5 @@ class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
-    try {
-      pluginManager.register(QuotaPlugin(this))
-    } catch (_: Throwable) {
-      // Plugin already registered or managed by Tauri
-    }
   }
 }
