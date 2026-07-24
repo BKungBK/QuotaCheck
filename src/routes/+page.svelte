@@ -21,6 +21,7 @@
 
   interface Config {
     mask_account_email?: boolean;
+    refresh_token_override?: string;
   }
 
   let pools = $state<QuotaPool[]>([]);
@@ -31,6 +32,10 @@
   let accountEmail = $state<string | undefined>(undefined);
   let maskAccountEmail = $state(false);
   let isLoading = $state(true);
+  let isRefreshing = $state(false);
+  let tokenInput = $state("");
+  let showTokenInput = $state(false);
+  let tokenSaveStatus = $state("");
 
   let now = $state(Date.now());
   $effect(() => {
@@ -48,7 +53,7 @@
   });
 
   let statusLabel = $derived.by(() => {
-    if (isLoading) return "loading...";
+    if (isLoading || isRefreshing) return "syncing...";
     if (isOffline) {
       if (errorReason === "process_not_found") return "process not found";
       return "offline";
@@ -58,10 +63,10 @@
   });
 
   let statusTooltip = $derived.by(() => {
-    if (isLoading) return "Fetching latest quota data...";
+    if (isLoading || isRefreshing) return "Fetching latest quota data...";
     if (isOffline) {
       if (errorReason === "process_not_found") return "Antigravity IDE or CLI process is not running";
-      return "Unable to connect to local quota endpoint";
+      return "Unable to connect to local/cloud quota endpoint";
     }
     if (isStale) return "Quota data has not updated in over 10 minutes";
     return "Connected to quota service";
@@ -71,9 +76,9 @@
     if (!lastUpdated) return "Never";
     const diffSecs = Math.floor((now - new Date(lastUpdated).getTime()) / 1000);
     if (diffSecs < 10) return "Now";
-    if (diffSecs < 60) return `${diffSecs}s`;
+    if (diffSecs < 60) return `${diffSecs}s ago`;
     const mins = Math.floor(diffSecs / 60);
-    return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h`;
+    return mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`;
   });
 
   function formatEmail(email: string | undefined, mask: boolean): string {
@@ -89,6 +94,80 @@
     return `${name.slice(0, 2)}***@${domain}`;
   }
 
+  async function loadQuotaData() {
+    // 1. Try Android Kotlin Plugin cache first
+    try {
+      const res = await invoke<{ cache: string }>("plugin:quota|getQuotaCache");
+      if (res && res.cache) {
+        const parsed = JSON.parse(res.cache);
+        if (parsed.pools && parsed.pools.length > 0) {
+          pools = parsed.pools;
+          isOffline = parsed.is_offline ?? false;
+          errorReason = parsed.error_reason;
+          if (parsed.last_updated) {
+            lastUpdated = parsed.last_updated;
+          }
+          source = "cloud";
+          isLoading = false;
+          return;
+        }
+      }
+    } catch (_e) {
+      // Not on Android or plugin not available
+    }
+
+    // 2. Desktop Rust command fallback
+    try {
+      const cache = await invoke<Cache>("get_current_quota");
+      pools = cache.pools || [];
+      isOffline = cache.is_offline;
+      errorReason = cache.error_reason;
+      lastUpdated = cache.last_updated;
+      source = cache.source;
+      accountEmail = cache.account_email;
+    } catch (e) {
+      console.error("Failed to load initial cache", e);
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  async function handleRefresh() {
+    isRefreshing = true;
+    try {
+      // Try Android plugin refresh first
+      await invoke("plugin:quota|triggerManualSync");
+    } catch (_e) {
+      // Try desktop Rust refresh
+      try {
+        await invoke("manual_refresh_trigger");
+      } catch (err) {
+        console.error("Refresh failed", err);
+      }
+    }
+    setTimeout(async () => {
+      await loadQuotaData();
+      isRefreshing = false;
+    }, 1500);
+  }
+
+  async function handleSaveToken() {
+    if (!tokenInput.trim()) return;
+    tokenSaveStatus = "Saving token...";
+    try {
+      // Try Android plugin
+      await invoke("plugin:quota|saveRefreshToken", { token: tokenInput.trim() });
+      tokenSaveStatus = "Token saved! Syncing...";
+      setTimeout(async () => {
+        await handleRefresh();
+        showTokenInput = false;
+        tokenSaveStatus = "";
+      }, 1000);
+    } catch (_e) {
+      tokenSaveStatus = "Saved to config";
+    }
+  }
+
   onMount(() => {
     let unlistenQuota: (() => void) | undefined;
     let unlistenRefresh: (() => void) | undefined;
@@ -98,41 +177,37 @@
       try {
         const cfg = await invoke<Config>("get_config");
         maskAccountEmail = cfg.mask_account_email ?? false;
+        if (cfg.refresh_token_override) {
+          tokenInput = cfg.refresh_token_override;
+        }
       } catch (e) {
         console.error("Failed to load config in page", e);
       }
 
+      await loadQuotaData();
+
       try {
-        const cache = await invoke<Cache>("get_current_quota");
-        pools = cache.pools || [];
-        isOffline = cache.is_offline;
-        errorReason = cache.error_reason;
-        lastUpdated = cache.last_updated;
-        source = cache.source;
-        accountEmail = cache.account_email;
-      } catch (e) {
-        console.error("Failed to load initial cache", e);
-      } finally {
-        isLoading = false;
+        unlistenQuota = await listen<Cache>("quota-update", (event) => {
+          pools = event.payload.pools || [];
+          isOffline = event.payload.is_offline;
+          errorReason = event.payload.error_reason;
+          lastUpdated = event.payload.last_updated;
+          source = event.payload.source;
+          accountEmail = event.payload.account_email;
+          isLoading = false;
+          isRefreshing = false;
+        });
+
+        unlistenConfig = await listen<Config>("config-updated", (event) => {
+          maskAccountEmail = event.payload.mask_account_email ?? false;
+        });
+
+        unlistenRefresh = await listen("refresh-started", () => {
+          isRefreshing = true;
+        });
+      } catch (_e) {
+        // Event listener fallback on platforms without Tauri event bus
       }
-
-      unlistenQuota = await listen<Cache>("quota-update", (event) => {
-        pools = event.payload.pools || [];
-        isOffline = event.payload.is_offline;
-        errorReason = event.payload.error_reason;
-        lastUpdated = event.payload.last_updated;
-        source = event.payload.source;
-        accountEmail = event.payload.account_email;
-        isLoading = false;
-      });
-
-      unlistenConfig = await listen<Config>("config-updated", (event) => {
-        maskAccountEmail = event.payload.mask_account_email ?? false;
-      });
-
-      unlistenRefresh = await listen("refresh-started", () => {
-        isLoading = true;
-      });
     };
 
     init();
@@ -145,7 +220,7 @@
   });
 
   function barColor(fraction: number): string {
-    if (isOffline) return "var(--color-bar-offline)";
+    if (isOffline && pools.length === 0) return "var(--color-bar-offline)";
     if (fraction <= 0.2) return "var(--color-bar-low)";
     return "var(--color-accent)";
   }
@@ -169,21 +244,33 @@
 
 <main
   class="widget"
-  class:offline={isOffline}
+  class:offline={isOffline && pools.length === 0}
   id="quota-widget"
   aria-label="Antigravity Quota Widget"
 >
   <div class="row-top">
-    <span class="label" id="widget-title" aria-hidden="true">BK</span>
-    <div class="live-badge" role="status" aria-live="polite" id="widget-status" title={statusTooltip}>
-      <span
-        class="dot"
-        class:dot-live={!isOffline && !isStale}
-        class:dot-stale={isStale}
-        id="widget-status-dot"
-        aria-hidden="true"
-      ></span>
-      {statusLabel}
+    <div class="header-left">
+      <span class="label" id="widget-title">BK</span>
+      <span class="sub-title">Antigravity Quota</span>
+    </div>
+    
+    <div class="header-right">
+      <button class="btn-icon" onclick={handleRefresh} title="Refresh Quota" disabled={isRefreshing}>
+        <svg class="refresh-icon" class:spinning={isRefreshing} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+        </svg>
+      </button>
+
+      <div class="live-badge" role="status" aria-live="polite" id="widget-status" title={statusTooltip}>
+        <span
+          class="dot"
+          class:dot-live={!isOffline && !isStale}
+          class:dot-stale={isStale}
+          id="widget-status-dot"
+          aria-hidden="true"
+        ></span>
+        {statusLabel}
+      </div>
     </div>
   </div>
 
@@ -227,7 +314,7 @@
             <div
               class="bar-fill"
               class:bar-fill--low={pool.remaining_fraction <= 0.2}
-              style="width: {isOffline ? 0 : pool.remaining_fraction * 100}%; background: {barColor(pool.remaining_fraction)}"
+              style="width: {pool.remaining_fraction * 100}%; background: {barColor(pool.remaining_fraction)}"
             ></div>
           </div>
           {#if resetText}
@@ -238,9 +325,34 @@
         </div>
       {:else}
         <div class="no-pools" id="no-pools-placeholder">
-          <span class="placeholder-text" title={statusTooltip}>
-            {errorReason === "process_not_found" ? "Process Not Found" : isOffline ? "Offline" : "No Pools"}
-          </span>
+          <div class="offline-box">
+            <span class="placeholder-text" title={statusTooltip}>
+              {errorReason === "process_not_found" ? "Process Not Found" : isOffline ? "Offline Mode" : "No Quota Data"}
+            </span>
+            <p class="offline-desc">
+              {#if isOffline}
+                Connect your account or set an OAuth Refresh Token to sync Quota directly.
+              {/if}
+            </p>
+
+            <button class="btn-setup" onclick={() => showTokenInput = !showTokenInput}>
+              {showTokenInput ? "Close Setup" : "⚙️ Setup Refresh Token"}
+            </button>
+
+            {#if showTokenInput}
+              <div class="token-form">
+                <input
+                  type="password"
+                  placeholder="Paste OAuth Refresh Token..."
+                  bind:value={tokenInput}
+                />
+                <button class="btn-save" onclick={handleSaveToken}>Save & Sync</button>
+                {#if tokenSaveStatus}
+                  <span class="save-status">{tokenSaveStatus}</span>
+                {/if}
+              </div>
+            {/if}
+          </div>
         </div>
       {/each}
     {/if}
@@ -248,7 +360,7 @@
 
   <div class="row-bottom">
     <span class="meta" id="quota-source">
-      {isOffline ? "Offline" : source === "local" ? "Local 🟢" : accountEmail ? `Cloud ☁️ • ${formatEmail(accountEmail, maskAccountEmail)}` : "Cloud ☁️"}
+      {isOffline && pools.length === 0 ? "Offline" : source === "local" ? "Local 🟢" : accountEmail ? `Cloud ☁️ • ${formatEmail(accountEmail, maskAccountEmail)}` : "Cloud ☁️"}
     </span>
     <span class="meta" id="quota-time-ago">{timeAgo}</span>
   </div>
@@ -258,123 +370,159 @@
   /* ── Design Tokens ── */
   :root {
     /* Surfaces */
-    --color-bg:         oklch(15% 0 0 / 0.65);
-    --color-surface:    oklch(20% 0 0 / 0.8);
-    --color-border:     oklch(25% 0 0 / 0.4);
-    --color-separator:  oklch(20% 0 0 / 0.4);
+    --color-bg:         oklch(14% 0 0 / 0.95);
+    --color-surface:    oklch(20% 0 0 / 0.9);
+    --color-border:     oklch(28% 0 0 / 0.6);
+    --color-separator:  oklch(22% 0 0 / 0.5);
 
     /* Skeleton shimmer layers */
     --color-shimmer-base:     oklch(18% 0 0 / 0.5);
     --color-shimmer-highlight: oklch(25% 0 0 / 0.5);
 
     /* Ink scale */
-    --color-ink:        oklch(85% 0 0);
-    --color-ink-high:   oklch(90% 0 0);   
-    --color-ink-mid:    oklch(65% 0 0);   
-    --color-ink-muted:  oklch(55% 0 0);   
-    --color-ink-dim:    oklch(50% 0 0);   
+    --color-ink:        oklch(88% 0 0);
+    --color-ink-high:   oklch(96% 0 0);   
+    --color-ink-mid:    oklch(70% 0 0);   
+    --color-ink-muted:  oklch(60% 0 0);   
+    --color-ink-dim:    oklch(52% 0 0);   
     --color-ink-subtle: oklch(45% 0 0);   
 
     /* Status dot */
-    --color-dot-offline: oklch(42% 0 0);
+    --color-dot-offline: oklch(45% 0 0);
     --color-dot-stale:   oklch(65% 0.15 80);
 
     /* Accent */
-    --color-accent:      oklch(48% 0 0);
-    --color-accent-glow: oklch(48% 0 0 / 0.5);
+    --color-accent:      oklch(62% 0.16 230);
+    --color-accent-glow: oklch(62% 0.16 230 / 0.4);
 
     /* Bar colors */
-    --color-bar-track:   oklch(20% 0 0 / 0.5);
-    --color-bar-offline: oklch(36% 0 0);
-    --color-bar-low:     oklch(42% 0 0);
+    --color-bar-track:   oklch(22% 0 0 / 0.8);
+    --color-bar-offline: oklch(38% 0 0);
+    --color-bar-low:     oklch(62% 0.22 25);
 
     /* Live dot color */
-    --color-dot-live:    oklch(75% 0 0);
-    --color-dot-live-glow: oklch(75% 0 0 / 0.4);
+    --color-dot-live:    oklch(75% 0.18 145);
+    --color-dot-live-glow: oklch(75% 0.18 145 / 0.4);
   }
 
   :global(html, body) {
     margin: 0;
     padding: 0;
-    background: transparent !important;
+    background: oklch(10% 0 0) !important;
     overflow: hidden;
+    height: 100%;
   }
 
   @keyframes pulseDot {
     0%, 100% { opacity: 1;   box-shadow: 0 0 0 0   var(--color-dot-live-glow); }
-    50%       { opacity: 0.8; box-shadow: 0 0 0 3px oklch(68% 0.17 160 / 0); }
+    50%       { opacity: 0.8; box-shadow: 0 0 0 3px var(--color-dot-live-glow); }
   }
   @keyframes shimmer {
     0%   { background-position: -200% 0; }
     100% { background-position:  200% 0; }
   }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
 
-  @media (prefers-reduced-motion: reduce) {
-    .widget { transition: none; }
-    .dot-live { animation: none; }
-    .bar-fill { transition: none; }
-    .skeleton .skeleton-text,
-    .skeleton .skeleton-bar {
-      animation: none;
-      background: var(--color-shimmer-base);
-    }
+  .spinning {
+    animation: spin 1s linear infinite;
   }
 
   .widget {
     width: 100vw;
     height: 100vh;
     box-sizing: border-box;
-    padding: 8px 12px;
+    padding: 16px;
     background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    font-family: "Inter", system-ui, sans-serif;
+    border-radius: 0px;
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
     color: var(--color-ink);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     user-select: none;
-    pointer-events: none;
-    transition: opacity 300ms ease, filter 300ms ease;
-  }
-  .widget.offline {
-    opacity: 0.55;
-    filter: grayscale(1);
+    pointer-events: auto;
   }
 
   .row-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin-bottom: 12px;
   }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
   .label {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--color-ink-high);
     margin: 0;
     line-height: 1;
+    background: oklch(25% 0 0);
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+
+  .sub-title {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-ink-mid);
+  }
+
+  .btn-icon {
+    background: none;
+    border: none;
+    color: var(--color-ink-mid);
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s;
+  }
+  .btn-icon:hover {
+    background: oklch(25% 0 0);
+    color: var(--color-ink-high);
+  }
+
+  .refresh-icon {
+    width: 16px;
+    height: 16px;
   }
 
   .live-badge {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 0.5625rem;
-    font-weight: 500;
+    gap: 5px;
+    font-size: 0.6875rem;
+    font-weight: 600;
     letter-spacing: 0.04em;
     color: var(--color-ink-mid);
-    cursor: help;
+    text-transform: uppercase;
   }
   .dot {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--color-dot-offline);
     display: inline-block;
     flex-shrink: 0;
-    will-change: opacity, box-shadow;
   }
   .dot-live {
     background: var(--color-dot-live);
@@ -387,65 +535,52 @@
   .pools-container {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 12px;
     flex-grow: 1;
     justify-content: flex-start;
-    margin: 6px 0;
+    margin: 12px 0;
     overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-ink-dim) transparent;
   }
-  .pools-container::-webkit-scrollbar {
-    width: 3px;
-  }
-  .pools-container::-webkit-scrollbar-thumb {
-    background: var(--color-ink-dim);
-    border-radius: 3px;
-  }
+
   .pool-row {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    padding: 6px 0;
-    transition: transform 300ms ease;
+    gap: 6px;
+    padding: 12px;
+    background: oklch(20% 0 0 / 0.5);
+    border: 1px solid oklch(26% 0 0 / 0.6);
+    border-radius: 8px;
   }
-  .pool-row + .pool-row {
-    border-top: 1px solid var(--color-separator);
-  }
+
   .pool-meta {
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
+
   .pool-label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--color-ink-high);
-    line-height: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-  }
-  .pool-percent {
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--color-ink-high);
-    line-height: 1;
-    flex-shrink: 0;
+  }
+
+  .pool-percent {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--color-accent);
   }
 
   .bar-track {
     width: 100%;
-    height: 5px;
+    height: 8px;
     background: var(--color-bar-track);
-    border-radius: 4px;
+    border-radius: 6px;
     overflow: hidden;
   }
+
   .bar-fill {
     height: 100%;
-    border-radius: 4px;
-    will-change: width;
+    border-radius: 6px;
     transition: width 400ms ease, background 600ms ease;
   }
 
@@ -454,41 +589,10 @@
     justify-content: flex-end;
     align-items: center;
   }
+
   .sub-meta {
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
     color: var(--color-ink-muted);
-    letter-spacing: 0.02em;
-  }
-
-  .skeleton .skeleton-text {
-    height: 10px;
-    background: linear-gradient(
-      90deg,
-      var(--color-shimmer-base) 25%,
-      var(--color-shimmer-highlight) 37%,
-      var(--color-shimmer-base) 63%
-    );
-    background-size: 400% 100%;
-    animation: shimmer 1.4s linear infinite;
-    border-radius: 4px;
-  }
-  .skeleton .skeleton-text.name      { width: 55px; }
-  .skeleton .skeleton-text.name--short { width: 50px; }
-  .skeleton .skeleton-text.percent   { width: 25px; }
-  .skeleton .skeleton-text.sub       { width: 85px; height: 8px; margin-top: 1px; }
-  .skeleton .skeleton-text.sub--short { width: 60px; height: 8px; margin-top: 1px; }
-
-  .skeleton .skeleton-bar {
-    width: 50%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      var(--color-shimmer-base) 25%,
-      var(--color-shimmer-highlight) 37%,
-      var(--color-shimmer-base) 63%
-    );
-    background-size: 400% 100%;
-    animation: shimmer 1.4s linear infinite;
   }
 
   .no-pools {
@@ -496,23 +600,91 @@
     align-items: center;
     justify-content: center;
     flex-grow: 1;
+    padding: 20px 0;
   }
+
+  .offline-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    max-width: 320px;
+    padding: 20px;
+    background: oklch(18% 0 0);
+    border: 1px solid oklch(26% 0 0);
+    border-radius: 12px;
+  }
+
   .placeholder-text {
-    font-size: 0.6875rem;
-    font-weight: 500;
-    color: var(--color-ink-subtle);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-ink-high);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
+  }
+
+  .offline-desc {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--color-ink-muted);
+    line-height: 1.4;
+  }
+
+  .btn-setup {
+    padding: 8px 14px;
+    background: oklch(26% 0 0);
+    border: 1px solid oklch(34% 0 0);
+    color: var(--color-ink-high);
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .token-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    margin-top: 6px;
+  }
+
+  .token-form input {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid oklch(30% 0 0);
+    background: oklch(12% 0 0);
+    color: #fff;
+    font-size: 0.75rem;
+  }
+
+  .btn-save {
+    padding: 8px;
+    background: oklch(48% 0.16 230);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .save-status {
+    font-size: 0.6875rem;
+    color: oklch(75% 0.15 140);
   }
 
   .row-bottom {
     display: flex;
     justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid oklch(20% 0 0);
   }
+
   .meta {
-    font-size: 0.5625rem;
+    font-size: 0.6875rem;
     font-weight: 500;
-    letter-spacing: 0.02em;
     color: var(--color-ink-dim);
   }
 </style>

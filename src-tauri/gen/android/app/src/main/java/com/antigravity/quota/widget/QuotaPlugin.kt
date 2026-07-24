@@ -54,8 +54,9 @@ class QuotaPlugin(private val activity: Activity) : Plugin(activity) {
         val args = invoke.parseArgs(SaveTokenArgs::class.java)
         sharedPreferences.edit().putString("refresh_token", args.token).apply()
 
-        // Schedule background sync when refresh token is updated
+        // Schedule periodic sync and trigger immediate sync when token is saved
         QuotaSyncWorker.schedulePeriodicSync(activity.applicationContext)
+        QuotaSyncWorker.triggerImmediateSync(activity.applicationContext)
 
         val ret = JSObject()
         ret.put("success", true)
