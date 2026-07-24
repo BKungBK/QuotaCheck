@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { flip } from 'svelte/animate';
   import type { QuotaPool } from '$lib/types';
   import { formatResetTime, barColor } from '$lib/quota-utils';
 
@@ -14,7 +13,7 @@
   const color = $derived(barColor(pool.remaining_fraction, isOffline, poolsLength === 0));
 </script>
 
-<div class="pool-row" animate:flip={{ duration: 300 }}>
+<div class="pool-row">
   <div class="pool-meta">
     <span class="pool-label">{pool.label}</span>
     <span class="pool-percent">{pct}%</span>
