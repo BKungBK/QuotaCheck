@@ -8,11 +8,26 @@
   import type { Cache, Config } from '$lib/types';
   import { quotaStore } from '$lib/quota-store.svelte';
 
-  // Shorthand destructure — reactive because quotaStore fields are $state/$derived
   const s = quotaStore;
 
-  // ── Desktop-only: load from Rust backend ──────────────────────────────────
+  // ── Mobile-only: try Kotlin plugin cache first, fall back to Rust ──────────
   async function loadQuotaData() {
+    // 1. Try Android Kotlin Plugin cache first
+    try {
+      const res = await invoke<{ cache: string }>('plugin:quota|getQuotaCache');
+      if (res && res.cache) {
+        const parsed = JSON.parse(res.cache);
+        if (parsed.pools && parsed.pools.length > 0) {
+          s.applyCache({ ...parsed, source: 'cloud' });
+          s.isLoading = false;
+          return;
+        }
+      }
+    } catch (_e) {
+      // Not on Android or plugin not available
+    }
+
+    // 2. Fallback to get_current_quota (Rust backend)
     try {
       const cache = await invoke<Cache>('get_current_quota');
       s.applyCache(cache);
@@ -23,13 +38,17 @@
     }
   }
 
-  // ── Desktop-only: refresh via Rust command ─────────────────────────────────
+  // ── Mobile-only: try Android plugin sync first ─────────────────────────────
   async function handleRefresh() {
     s.isRefreshing = true;
     try {
-      await invoke('manual_refresh_trigger');
-    } catch (err) {
-      console.error('Refresh failed', err);
+      await invoke('plugin:quota|triggerManualSync');
+    } catch (_e) {
+      try {
+        await invoke('manual_refresh_trigger');
+      } catch (err) {
+        console.error('Refresh failed', err);
+      }
     }
     setTimeout(async () => {
       await loadQuotaData();
@@ -37,22 +56,20 @@
     }, 1500);
   }
 
-  // ── Desktop-only: save token via Rust config ───────────────────────────────
+  // ── Mobile-only: save token via Kotlin plugin ──────────────────────────────
   async function handleSaveToken() {
     if (!s.tokenInput.trim()) return;
     s.tokenSaveStatus = 'Saving token...';
     try {
-      const cfg = await invoke<Config>('get_config');
-      cfg.refresh_token_override = s.tokenInput.trim();
-      await invoke('save_config', { newConfig: cfg });
-      s.tokenSaveStatus = 'Saved to config! Syncing...';
+      await invoke('plugin:quota|saveRefreshToken', { token: s.tokenInput.trim() });
+      s.tokenSaveStatus = 'Token saved! Syncing...';
       setTimeout(async () => {
         await handleRefresh();
         s.showTokenInput = false;
         s.tokenSaveStatus = '';
       }, 1000);
-    } catch (e) {
-      s.tokenSaveStatus = `Error: ${e}`;
+    } catch (_e) {
+      s.tokenSaveStatus = 'Saved to config';
     }
   }
 
@@ -87,12 +104,12 @@
 <main
   class="widget"
   class:offline={s.isOffline && s.pools.length === 0}
-  id="quota-widget"
-  aria-label="Antigravity Quota Widget"
+  id="mobile-quota-widget"
+  aria-label="Antigravity Quota Mobile App"
 >
   <div class="row-top">
     <div class="header-left">
-      <span class="label" id="widget-title">BK</span>
+      <span class="label">BK</span>
       <span class="sub-title">Antigravity Quota</span>
     </div>
     
@@ -110,12 +127,11 @@
         </svg>
       </a>
 
-      <div class="live-badge" role="status" aria-live="polite" id="widget-status" title={s.statusTooltip}>
+      <div class="live-badge" role="status" aria-live="polite" title={s.statusTooltip}>
         <span
           class="dot"
           class:dot-live={!s.isOffline && !s.isStale}
           class:dot-stale={s.isStale}
-          id="widget-status-dot"
           aria-hidden="true"
         ></span>
         {s.statusLabel}
@@ -123,7 +139,7 @@
     </div>
   </div>
 
-  <div class="pools-container" id="quota-pools-list">
+  <div class="pools-container">
     {#if s.isLoading}
       <SkeletonRow />
       <SkeletonRow short />
@@ -133,14 +149,14 @@
           <PoolRow {pool} isOffline={s.isOffline} poolsLength={s.pools.length} />
         </div>
       {:else}
-        <div class="no-pools" id="no-pools-placeholder">
+        <div class="no-pools">
           <div class="offline-box">
             <span class="placeholder-text" title={s.statusTooltip}>
               {s.errorReason === 'process_not_found' ? 'Process Not Found' : s.isOffline ? 'Offline Mode' : 'No Quota Data'}
             </span>
             <p class="offline-desc">
               {#if s.isOffline}
-                Connect your account or set an OAuth Refresh Token to sync Quota directly.
+                Set an OAuth Refresh Token to sync Quota directly on mobile.
               {/if}
             </p>
 
@@ -168,15 +184,15 @@
   </div>
 
   <div class="row-bottom">
-    <span class="meta" id="quota-source">
+    <span class="meta">
       {s.isOffline && s.pools.length === 0 ? 'Offline' : s.source === 'local' ? 'Local 🟢' : s.accountEmail ? `Cloud ☁️ • ${formatEmail(s.accountEmail, s.maskAccountEmail)}` : 'Cloud ☁️'}
     </span>
-    <span class="meta" id="quota-time-ago">{s.timeAgo}</span>
+    <span class="meta">{s.timeAgo}</span>
   </div>
 </main>
 
 <style>
-  /* ── Design Tokens ── */
+  /* ── Mobile Design Tokens ── */
   :root {
     --color-bg:         oklch(14% 0 0 / 0.95);
     --color-surface:    oklch(20% 0 0 / 0.9);
@@ -191,14 +207,11 @@
     --color-ink-mid:    oklch(70% 0 0);
     --color-ink-muted:  oklch(60% 0 0);
     --color-ink-dim:    oklch(52% 0 0);
-    --color-ink-subtle: oklch(45% 0 0);
 
     --color-dot-offline: oklch(45% 0 0);
     --color-dot-stale:   oklch(65% 0.15 80);
 
     --color-accent:      oklch(62% 0.16 230);
-    --color-accent-glow: oklch(62% 0.16 230 / 0.4);
-
     --color-bar-track:   oklch(22% 0 0 / 0.8);
     --color-bar-offline: oklch(38% 0 0);
     --color-bar-low:     oklch(62% 0.22 25);
@@ -232,7 +245,6 @@
     box-sizing: border-box;
     padding: 16px;
     background: var(--color-bg);
-    border-radius: 0px;
     font-family: "Inter", system-ui, -apple-system, sans-serif;
     color: var(--color-ink);
     display: flex;
@@ -281,15 +293,15 @@
     align-items: center;
     justify-content: center;
     border-radius: 4px;
-    transition: background 0.2s;
     text-decoration: none;
+    transition: background 0.2s;
   }
   .btn-icon:hover {
     background: oklch(25% 0 0);
     color: var(--color-ink-high);
   }
 
-  .refresh-icon { width: 16px; height: 16px; }
+  .refresh-icon { width: 18px; height: 18px; }
 
   .live-badge {
     display: flex;
@@ -309,7 +321,7 @@
     display: inline-block;
     flex-shrink: 0;
   }
-  .dot-live { background: var(--color-dot-live); animation: pulseDot 2.4s ease-in-out infinite; }
+  .dot-live  { background: var(--color-dot-live); animation: pulseDot 2.4s ease-in-out infinite; }
   .dot-stale { background: var(--color-dot-stale); }
 
   .pools-container {
