@@ -1,4 +1,5 @@
 pub mod config;
+#[cfg(target_os = "windows")]
 pub mod windows_layer;
 pub mod quota_client;
 
@@ -6,7 +7,9 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, Emitter, State};
 use tokio::time::{sleep, Duration};
 use tokio::sync::mpsc;
+#[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem, CheckMenuItem};
+#[cfg(desktop)]
 use tauri::tray::TrayIconBuilder;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
@@ -20,7 +23,14 @@ struct AppState {
 
 #[tauri::command]
 fn get_monitor_count() -> usize {
-    windows_layer::get_monitor_count()
+    #[cfg(target_os = "windows")]
+    {
+        windows_layer::get_monitor_count()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        1
+    }
 }
 
 #[tauri::command]
@@ -42,6 +52,7 @@ async fn trigger_refresh_internal(app_handle: &AppHandle, state: &AppState) {
 async fn save_config(app_handle: AppHandle, state: State<'_, Arc<AppState>>, new_config: config::Config) -> Result<(), String> {
     config::save_config(&new_config).map_err(|e| e.to_string())?;
     let _ = toggle_autostart(new_config.autostart);
+    #[cfg(target_os = "windows")]
     if let Some(window) = app_handle.get_webview_window("main") {
         windows_layer::setup_with_retry(&window).await;
     }
@@ -189,6 +200,7 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
 }
 
 fn toggle_autostart(enable: bool) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
     unsafe {
         use windows::Win32::System::Registry::{
             RegOpenKeyExW, RegSetValueExW, RegDeleteValueW, RegCloseKey,
@@ -231,6 +243,11 @@ fn toggle_autostart(enable: bool) -> Result<(), String> {
         }
 
         let _ = RegCloseKey(hkey);
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = enable;
         Ok(())
     }
 }
@@ -279,76 +296,80 @@ pub fn run() {
         .manage(app_state)
         .setup(move |app| {
             if let Some(window) = app.get_webview_window("main") {
+                #[cfg(target_os = "windows")]
                 windows_layer::init_wallpaper_widget(window);
             }
 
-            let refresh = MenuItem::with_id(app, "refresh", "Refresh Now", true, None::<&str>).unwrap();
-            let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>).unwrap();
-            
-            let cfg = config::load_config();
-            let _ = toggle_autostart(cfg.autostart);
-            let autostart = CheckMenuItem::with_id(
-                app,
-                "autostart",
-                "Run at Startup",
-                true,
-                cfg.autostart,
-                None::<&str>,
-            ).unwrap();
-            
-            let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>).unwrap();
+            #[cfg(desktop)]
+            {
+                let refresh = MenuItem::with_id(app, "refresh", "Refresh Now", true, None::<&str>).unwrap();
+                let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>).unwrap();
+                
+                let cfg = config::load_config();
+                let _ = toggle_autostart(cfg.autostart);
+                let autostart = CheckMenuItem::with_id(
+                    app,
+                    "autostart",
+                    "Run at Startup",
+                    true,
+                    cfg.autostart,
+                    None::<&str>,
+                ).unwrap();
+                
+                let exit = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>).unwrap();
 
-            let menu = Menu::with_items(app, &[&refresh, &settings, &autostart, &exit]).unwrap();
-            let refresh_tx = state_clone.refresh_trigger.clone();
+                let menu = Menu::with_items(app, &[&refresh, &settings, &autostart, &exit]).unwrap();
+                let refresh_tx = state_clone.refresh_trigger.clone();
 
-            let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
-                .menu(&menu)
-                .on_menu_event(move |app_handle, event| {
-                    match event.id.as_ref() {
-                        "refresh" => {
-                            let _ = app_handle.emit("refresh-started", ());
-                            let tx = refresh_tx.clone();
-                            tauri::async_runtime::spawn(async move {
-                                let _ = tx.send(()).await;
-                            });
-                        }
-                        "settings" => {
-                            if let Some(window) = app_handle.get_webview_window("settings") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            } else {
-                                let _ = tauri::WebviewWindowBuilder::new(
-                                    app_handle,
-                                    "settings",
-                                    tauri::WebviewUrl::App("/settings".into()),
-                                )
-                                .title("QuotaCheck Settings")
-                                .inner_size(360.0, 520.0)
-                                .resizable(false)
-                                .build();
+                let _tray = TrayIconBuilder::new()
+                    .icon(app.default_window_icon().unwrap().clone())
+                    .menu(&menu)
+                    .on_menu_event(move |app_handle, event| {
+                        match event.id.as_ref() {
+                            "refresh" => {
+                                let _ = app_handle.emit("refresh-started", ());
+                                let tx = refresh_tx.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    let _ = tx.send(()).await;
+                                });
                             }
-                        }
-                        "autostart" => {
-                            let mut config = config::load_config();
-                            config.autostart = !config.autostart;
-                            let _ = config::save_config(&config);
-                            let _ = toggle_autostart(config.autostart);
-                            
-                            if let Some(menu) = app_handle.menu() {
-                                if let Some(tauri::menu::MenuItemKind::Check(menu_item)) = menu.get("autostart") {
-                                    let _ = menu_item.set_checked(config.autostart);
+                            "settings" => {
+                                if let Some(window) = app_handle.get_webview_window("settings") {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                } else {
+                                    let _ = tauri::WebviewWindowBuilder::new(
+                                        app_handle,
+                                        "settings",
+                                        tauri::WebviewUrl::App("/settings".into()),
+                                    )
+                                    .title("QuotaCheck Settings")
+                                    .inner_size(360.0, 520.0)
+                                    .resizable(false)
+                                    .build();
                                 }
                             }
+                            "autostart" => {
+                                let mut config = config::load_config();
+                                config.autostart = !config.autostart;
+                                let _ = config::save_config(&config);
+                                let _ = toggle_autostart(config.autostart);
+                                
+                                if let Some(menu) = app_handle.menu() {
+                                    if let Some(tauri::menu::MenuItemKind::Check(menu_item)) = menu.get("autostart") {
+                                        let _ = menu_item.set_checked(config.autostart);
+                                    }
+                                }
+                            }
+                            "exit" => {
+                                app_handle.exit(0);
+                            }
+                            _ => {}
                         }
-                        "exit" => {
-                            app_handle.exit(0);
-                        }
-                        _ => {}
-                    }
-                })
-                .build(app)
-                .unwrap();
+                    })
+                    .build(app)
+                    .unwrap();
+            }
 
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

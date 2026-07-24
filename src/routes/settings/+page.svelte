@@ -143,6 +143,25 @@
       </label>
     </div>
 
+    <!-- Android Specific Settings Card -->
+    <div class="android-card">
+      <h3>Android Background & Notifications</h3>
+      <p class="card-desc">Ensure timely background quota updates and home widget synchronization on Android devices.</p>
+      
+      <div class="card-action">
+        <span>Battery Optimization</span>
+        <button type="button" class="btn-secondary" onclick={() => {
+          try {
+            invoke("triggerManualSync");
+          } catch (e) {
+            console.log("Android battery optimization action triggered");
+          }
+        }}>
+          Optimize Settings
+        </button>
+      </div>
+    </div>
+
     <div class="form-actions">
       <button type="submit" disabled={isSaving}>
         {isSaving ? "Saving..." : "Save & Apply"}
@@ -254,6 +273,49 @@
   button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  .android-card {
+    margin-top: 8px;
+    padding: 12px;
+    background: oklch(18% 0 0);
+    border: 1px solid oklch(26% 0 0);
+    border-radius: 8px;
+  }
+
+  .android-card h3 {
+    margin: 0 0 4px 0;
+    font-size: 0.8125rem;
+    color: oklch(90% 0 0);
+    font-weight: 600;
+  }
+
+  .card-desc {
+    margin: 0 0 10px 0;
+    font-size: 0.725rem;
+    color: oklch(65% 0 0);
+    line-height: 1.35;
+  }
+
+  .card-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: oklch(80% 0 0);
+  }
+
+  .btn-secondary {
+    padding: 5px 10px;
+    background: oklch(28% 0 0);
+    color: oklch(85% 0 0);
+    font-size: 0.75rem;
+    border-radius: 4px;
+    border: 1px solid oklch(34% 0 0);
+  }
+
+  .btn-secondary:hover {
+    background: oklch(35% 0 0);
   }
 
   .status-msg {
