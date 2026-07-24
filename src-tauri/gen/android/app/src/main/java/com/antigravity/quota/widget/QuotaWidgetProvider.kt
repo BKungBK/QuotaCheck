@@ -98,13 +98,15 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                         // Slot 1
                         val p1 = pools.optJSONObject(0)
                         if (p1 != null) {
-                            val label = p1.optString("label", "Claude")
+                            val label = p1.optString("label", "Gemini")
                             val rem = p1.optDouble("remaining_fraction", 1.0)
                             val resetStr = p1.optString("reset_time", "")
                             val pct = (rem * 100).toInt().coerceIn(0, 100)
+                            val textColor = if (pct <= 20) Color.parseColor("#EF4444") else Color.parseColor("#38BDF8")
 
                             views.setTextViewText(R.id.pool1_label, label)
                             views.setTextViewText(R.id.pool1_percent, "$pct%")
+                            views.setTextColor(R.id.pool1_percent, textColor)
                             views.setTextViewText(R.id.pool1_reset_text, formatResetTime(resetStr))
                             views.setProgressBar(R.id.pool1_progress, 100, pct, false)
                             views.setViewVisibility(R.id.pool1_container, View.VISIBLE)
@@ -114,13 +116,15 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                         if (pools.length() > 1) {
                             val p2 = pools.optJSONObject(1)
                             if (p2 != null) {
-                                val label = p2.optString("label", "Gemini")
+                                val label = p2.optString("label", "Claude")
                                 val rem = p2.optDouble("remaining_fraction", 1.0)
                                 val resetStr = p2.optString("reset_time", "")
                                 val pct = (rem * 100).toInt().coerceIn(0, 100)
+                                val textColor = if (pct <= 20) Color.parseColor("#EF4444") else Color.parseColor("#38BDF8")
 
                                 views.setTextViewText(R.id.pool2_label, label)
                                 views.setTextViewText(R.id.pool2_percent, "$pct%")
+                                views.setTextColor(R.id.pool2_percent, textColor)
                                 views.setTextViewText(R.id.pool2_reset_text, formatResetTime(resetStr))
                                 views.setProgressBar(R.id.pool2_progress, 100, pct, false)
                                 views.setViewVisibility(R.id.pool2_container, View.VISIBLE)

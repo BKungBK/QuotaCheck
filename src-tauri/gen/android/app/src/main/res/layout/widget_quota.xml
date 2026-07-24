@@ -4,14 +4,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="14dp"
+    android:padding="8dp"
     android:background="@drawable/widget_bg">
 
     <!-- Top Header Row -->
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="12dp">
+        android:layout_marginBottom="6dp">
 
         <!-- Left: BK Badge + App Title -->
         <LinearLayout
@@ -94,15 +94,15 @@
         </LinearLayout>
     </RelativeLayout>
 
-    <!-- Quota Pool 1 Card (Claude) -->
+    <!-- Quota Pool 1 Card -->
     <LinearLayout
         android:id="@+id/pool1_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/widget_card_bg"
-        android:padding="10dp"
-        android:layout_marginBottom="8dp">
+        android:padding="8dp"
+        android:layout_marginBottom="6dp">
 
         <RelativeLayout
             android:layout_width="match_parent"
@@ -112,7 +112,7 @@
                 android:id="@+id/pool1_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Claude"
+                android:text="Gemini"
                 android:textColor="#F4F4F5"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -135,7 +135,7 @@
                 android:layout_height="wrap_content"
                 android:layout_alignParentEnd="true"
                 android:text="100%"
-                android:textColor="#818CF8"
+                android:textColor="#38BDF8"
                 android:textSize="12sp"
                 android:textStyle="bold" />
         </RelativeLayout>
@@ -144,21 +144,22 @@
             android:id="@+id/pool1_progress"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
-            android:layout_height="6dp"
-            android:layout_marginTop="6dp"
-            android:progressDrawable="@drawable/progress_bar_custom_claude"
+            android:layout_height="5dp"
+            android:layout_marginTop="4dp"
+            android:progressDrawable="@drawable/progress_bar_custom_gemini"
             android:max="100"
             android:progress="100" />
     </LinearLayout>
 
-    <!-- Quota Pool 2 Card (Gemini) -->
+    <!-- Quota Pool 2 Card -->
     <LinearLayout
         android:id="@+id/pool2_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/widget_card_bg"
-        android:padding="10dp">
+        android:padding="8dp"
+        android:layout_marginBottom="6dp">
 
         <RelativeLayout
             android:layout_width="match_parent"
@@ -168,7 +169,7 @@
                 android:id="@+id/pool2_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Gemini"
+                android:text="Claude"
                 android:textColor="#F4F4F5"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -200,9 +201,9 @@
             android:id="@+id/pool2_progress"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
-            android:layout_height="6dp"
-            android:layout_marginTop="6dp"
-            android:progressDrawable="@drawable/progress_bar_custom_gemini"
+            android:layout_height="5dp"
+            android:layout_marginTop="4dp"
+            android:progressDrawable="@drawable/progress_bar_custom_claude"
             android:max="100"
             android:progress="100" />
     </LinearLayout>
@@ -211,7 +212,7 @@
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp">
+        android:layout_marginTop="4dp">
 
         <TextView
             android:id="@+id/widget_source_text"
