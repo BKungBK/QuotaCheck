@@ -431,20 +431,20 @@
 </div>
 
 <style>
-  /* ── Modern Material 3 Android App Design Tokens ── */
+  /* ── PC Desktop Aligned Dark Gray Tokens ── */
   :root {
-    --m3-bg:              oklch(12% 0.01 260);
-    --m3-surface:         oklch(17% 0.015 260);
-    --m3-surface-variant: oklch(22% 0.02 260);
-    --m3-outline:         oklch(28% 0.02 260);
+    --m3-bg:              oklch(14% 0 0 / 0.95);
+    --m3-surface:         oklch(20% 0 0 / 0.9);
+    --m3-surface-variant: oklch(24% 0 0 / 0.9);
+    --m3-outline:         oklch(28% 0 0 / 0.6);
     
-    --m3-primary:         oklch(68% 0.18 240);
-    --m3-primary-container: oklch(26% 0.08 240);
-    --m3-on-primary-container: oklch(88% 0.12 240);
+    --m3-primary:         oklch(62% 0.16 230);
+    --m3-primary-container: oklch(25% 0 0);
+    --m3-on-primary-container: oklch(96% 0 0);
 
-    --m3-ink-high:        oklch(96% 0.005 260);
-    --m3-ink-mid:         oklch(78% 0.01 260);
-    --m3-ink-muted:       oklch(62% 0.01 260);
+    --m3-ink-high:        oklch(96% 0 0);
+    --m3-ink-mid:         oklch(70% 0 0);
+    --m3-ink-muted:       oklch(60% 0 0);
 
     --m3-success:         oklch(75% 0.18 145);
     --m3-warning:         oklch(75% 0.16 75);
@@ -483,7 +483,7 @@
   /* App Shell Container */
   .mobile-app-shell {
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     background: var(--m3-bg);
@@ -497,7 +497,7 @@
   /* Pull to Refresh Spinner Bar */
   .pull-refresh-indicator {
     position: absolute;
-    top: 8px;
+    top: max(8px, env(safe-area-inset-top, 0px));
     left: 50%;
     margin-left: -20px;
     width: 40px;
@@ -519,9 +519,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 20px 12px 20px;
+    padding: max(14px, env(safe-area-inset-top, 0px)) 20px 12px 20px;
     background: var(--m3-bg);
-    border-bottom: 1px solid oklch(20% 0.01 260);
+    border-bottom: 1px solid oklch(22% 0 0 / 0.5);
     z-index: 10;
   }
   .app-brand {
@@ -704,17 +704,7 @@
     width: 100%;
     cursor: pointer;
     border-radius: 12px;
-    transition: transform 0.15s ease, border-color 0.3s ease;
-  }
-  /* Dynamic Accents */
-  .card--high {
-    border-left: 4px solid oklch(68% 0.18 220);
-  }
-  .card--medium {
-    border-left: 4px solid oklch(75% 0.18 75);
-  }
-  .card--low {
-    border-left: 4px solid oklch(65% 0.22 25);
+    transition: transform 0.15s ease;
   }
 
   /* Offline Card */
@@ -904,13 +894,13 @@
 
   /* Material 3 Bottom Navigation Bar */
   .bottom-nav-bar {
-    height: 64px;
-    background: oklch(14% 0.01 260);
-    border-top: 1px solid oklch(22% 0.015 260);
+    height: calc(56px + max(12px, env(safe-area-inset-bottom, 0px)));
+    background: oklch(14% 0 0 / 0.95);
+    border-top: 1px solid oklch(22% 0 0 / 0.5);
     display: flex;
     align-items: center;
     justify-content: space-around;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
     z-index: 10;
   }
   .nav-item {
