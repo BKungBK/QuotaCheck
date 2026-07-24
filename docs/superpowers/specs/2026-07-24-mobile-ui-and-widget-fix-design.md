@@ -9,8 +9,8 @@
 
 This design addresses all user-reported mobile issues:
 1. **Android Home Screen Widget:**
-   - **Ordering Fix:** Dynamically render pool slots in `QuotaWidgetProvider.kt` to strictly match the app's pool order. Remove hardcoded XML text defaults.
-   - **Color Fix:** Align progress bar and text colors with the PC desktop widget's natural dark gray and active blue palette (`oklch(62% 0.16 230)` / `#38BDF8`), switching to red/amber when quota $\le 20\%$.
+   - **Ordering Fix:** Dynamically render pool slots in `QuotaWidgetProvider.kt` to strictly match the app's pool order (`pools[0]` $\rightarrow$ Slot 1, `pools[1]` $\rightarrow$ Slot 2). Remove hardcoded XML text defaults.
+   - **Color Exact Match with PC:** On PC and Main App, ALL active pools (both Gemini and Claude) use the exact same **Cyan Blue (`#38BDF8`)** progress bar and percentage text color. In the previous widget code, Claude was mistakenly colored Purple (`#818CF8`). Fix the widget drawables and Kotlin code so that ALL active pools use `#38BDF8` (Cyan Blue), switching to `#EF4444` (Red/Amber) when quota $\le 20\%$, and `#52525B` when offline, matching PC desktop 100%.
    - **Size Cutoff Fix:** Redesign `widget_quota.xml` layout padding (8dp), card padding (8dp), and margins to fit 2 pools + header + footer inside standard 2-cell launcher height (110dp) without bottom clipping.
 2. **Mobile App Layout & Safe Areas:**
    - Add `viewport-fit=cover` to `<meta name="viewport">` in `app.html`.
@@ -35,13 +35,13 @@ This design addresses all user-reported mobile issues:
 - Progress Bars (`pool1_progress`, `pool2_progress`): `layout_height="5dp"`.
 - Footer: `layout_marginTop="4dp"`, guaranteed visibility within 110dp launcher height.
 
-#### `QuotaWidgetProvider.kt` Dynamic Binding
+#### `QuotaWidgetProvider.kt` Dynamic Binding & Unified Color Rule
 - Slot 1 (`pool1`) binds to `pools[0]`; Slot 2 (`pool2`) binds to `pools[1]`.
 - If `pools.length() == 1`, set `pool2_container` visibility to `GONE`.
-- Progress drawables and percent text colors are set dynamically based on quota percentage:
-  - $>20\%$: Active Blue (`#38BDF8`)
-  - $\le 20\%$: Warning Amber (`#F59E0B`)
-  - Offline: Dark Muted Gray (`#71717A`)
+- Progress drawables and percent text colors match PC Desktop Widget exactly:
+  - $>20\%$: Active Cyan Blue (`#38BDF8`) for ALL pools (Gemini & Claude)
+  - $\le 20\%$: Warning Amber/Red (`#EF4444`)
+  - Offline: Dark Muted Gray (`#52525B`)
 
 ### B. Mobile App Safe Area & Layout (`MobileApp.svelte` & `app.html`)
 
@@ -68,7 +68,7 @@ This design addresses all user-reported mobile issues:
   - Background: `oklch(14% 0 0 / 0.95)` (`#18181B`)
   - Cards / Surface: `oklch(20% 0 0 / 0.9)` (`#27272A`)
   - Borders: `oklch(28% 0 0 / 0.6)` (`#3F3F46`)
-  - Accent: `oklch(62% 0.16 230)` (`#38BDF8`)
+  - Accent (All Active Progress Bars): `oklch(62% 0.16 230)` (`#38BDF8`)
   - High Contrast Ink: `oklch(96% 0 0)` (`#FAFAFA`)
   - Muted Ink: `oklch(60% 0 0)` (`#A1A1AA`)
 
@@ -83,9 +83,9 @@ This design addresses all user-reported mobile issues:
 ## 3. Verification & Testing Strategy
 
 1. **Android Widget:**
+   - Verify both Gemini and Claude active progress bars use **Cyan Blue (`#38BDF8`)**, matching PC desktop.
    - Verify 2 pools fit inside 3x2 / 2x2 launcher widget without bottom text cutoff.
    - Verify pool order (Gemini vs Claude) matches main app.
-   - Verify active blue progress bar and dark gray background match PC styling.
 2. **Mobile App:**
    - Verify top header is positioned below the status bar (no overlap with clock `21:18`).
    - Verify bottom nav bar is positioned above system gesture indicator line (`===`).
