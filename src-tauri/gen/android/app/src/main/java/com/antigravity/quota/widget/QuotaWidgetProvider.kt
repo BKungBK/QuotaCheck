@@ -6,9 +6,14 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 class QuotaWidgetProvider : AppWidgetProvider() {
 
@@ -22,6 +27,19 @@ class QuotaWidgetProvider : AppWidgetProvider() {
             for (id in appWidgetIds) {
                 val views = buildRemoteViews(context)
                 appWidgetManager.updateAppWidget(id, views)
+            }
+        }
+
+        private fun formatResetTime(resetIsoStr: String?): String {
+            if (resetIsoStr.isNull_or_empty()) return ""
+            return try {
+                val sdfInput = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+                sdfInput.timeZone = TimeZone.getTimeZone("UTC")
+                val date = sdfInput.parse(resetIsoStr) ?: return ""
+                val sdfOutput = SimpleDateFormat("HH:mm", Locale.getDefault())
+                "Reset " + sdfOutput.format(date)
+            } catch (_: Exception) {
+                ""
             }
         }
 
@@ -58,9 +76,23 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                     val pools = cacheObj.optJSONArray("pools")
                     val lastUpdated = cacheObj.optString("last_updated", "--:--")
                     val isOffline = cacheObj.optBoolean("is_offline", false)
+                    val source = cacheObj.optString("source", "cloud")
 
-                    val statusLabel = if (isOffline) "Offline · $lastUpdated" else "Synced $lastUpdated"
-                    views.setTextViewText(R.id.widget_status_text, statusLabel)
+                    // Status Dot & Text
+                    if (isOffline) {
+                        views.setImageViewResource(R.id.widget_status_dot, R.drawable.dot_offline)
+                        views.setTextViewText(R.id.widget_status_text, "OFFLINE")
+                        views.setTextColor(R.id.widget_status_text, Color.parseColor("#71717A"))
+                        views.setTextViewText(R.id.widget_source_text, "Offline 🔴")
+                    } else {
+                        views.setImageViewResource(R.id.widget_status_dot, R.drawable.dot_live)
+                        views.setTextViewText(R.id.widget_status_text, "LIVE")
+                        views.setTextColor(R.id.widget_status_text, Color.parseColor("#22C55E"))
+                        val srcLabel = if (source == "local") "Local 🟢" else "Cloud ☁️"
+                        views.setTextViewText(R.id.widget_source_text, srcLabel)
+                    }
+
+                    views.setTextViewText(R.id.widget_time_ago_text, "Synced $lastUpdated")
 
                     if (pools != null && pools.length() > 0) {
                         // Slot 1
@@ -68,10 +100,12 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                         if (p1 != null) {
                             val label = p1.optString("label", "Claude")
                             val rem = p1.optDouble("remaining_fraction", 1.0)
-                            val pct = (rem * 100).toInt()
+                            val resetStr = p1.optString("reset_time", "")
+                            val pct = (rem * 100).toInt().coerceIn(0, 100)
 
                             views.setTextViewText(R.id.pool1_label, label)
                             views.setTextViewText(R.id.pool1_percent, "$pct%")
+                            views.setTextViewText(R.id.pool1_reset_text, formatResetTime(resetStr))
                             views.setProgressBar(R.id.pool1_progress, 100, pct, false)
                             views.setViewVisibility(R.id.pool1_container, View.VISIBLE)
                         }
@@ -82,10 +116,12 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                             if (p2 != null) {
                                 val label = p2.optString("label", "Gemini")
                                 val rem = p2.optDouble("remaining_fraction", 1.0)
-                                val pct = (rem * 100).toInt()
+                                val resetStr = p2.optString("reset_time", "")
+                                val pct = (rem * 100).toInt().coerceIn(0, 100)
 
                                 views.setTextViewText(R.id.pool2_label, label)
                                 views.setTextViewText(R.id.pool2_percent, "$pct%")
+                                views.setTextViewText(R.id.pool2_reset_text, formatResetTime(resetStr))
                                 views.setProgressBar(R.id.pool2_progress, 100, pct, false)
                                 views.setViewVisibility(R.id.pool2_container, View.VISIBLE)
                             }
@@ -107,3 +143,5 @@ class QuotaWidgetProvider : AppWidgetProvider() {
         }
     }
 }
+
+private fun String?.isNull_or_empty(): Boolean = this == null || this.trim().isEmpty()

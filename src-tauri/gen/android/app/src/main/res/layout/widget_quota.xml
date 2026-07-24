@@ -4,58 +4,104 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="12dp"
-    android:background="@android:color/black">
+    android:padding="14dp"
+    android:background="@drawable/widget_bg">
 
-    <!-- Header Row -->
+    <!-- Top Header Row -->
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp">
+        android:layout_marginBottom="12dp">
 
+        <!-- Left: BK Badge + App Title -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:layout_alignParentStart="true"
-            android:layout_toStartOf="@id/widget_btn_refresh">
+            android:layout_toStartOf="@id/header_right_actions">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="ANTIGRAVITY QUOTA"
-                android:textColor="#A1A1AA"
+                android:text="BK"
+                android:textColor="#FFFFFF"
                 android:textSize="10sp"
                 android:textStyle="bold"
-                android:letterSpacing="0.05" />
+                android:background="@drawable/widget_badge_bg"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="3dp"
+                android:layout_marginEnd="8dp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Quota Check"
+                    android:textColor="#F4F4F5"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Antigravity AI"
+                    android:textColor="#9CA3AF"
+                    android:textSize="9sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Right: Refresh & Status -->
+        <LinearLayout
+            android:id="@+id/header_right_actions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true">
+
+            <ImageView
+                android:id="@+id/widget_status_dot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:src="@drawable/dot_live"
+                android:layout_marginEnd="4dp" />
 
             <TextView
                 android:id="@+id/widget_status_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Synced --:--"
-                android:textColor="#71717A"
-                android:textSize="9sp" />
-        </LinearLayout>
+                android:textColor="#A1A1AA"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="6dp" />
 
-        <ImageButton
-            android:id="@+id/widget_btn_refresh"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_alignParentEnd="true"
-            android:layout_centerVertical="true"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_popup_sync"
-            android:tint="#A1A1AA"
-            android:contentDescription="Refresh Quota" />
+            <ImageButton
+                android:id="@+id/widget_btn_refresh"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_popup_sync"
+                android:tint="#D4D4D8"
+                android:contentDescription="Refresh Quota" />
+        </LinearLayout>
     </RelativeLayout>
 
-    <!-- Pool 1 Row (Claude) -->
+    <!-- Quota Pool 1 Card (Claude) -->
     <LinearLayout
         android:id="@+id/pool1_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
+        android:background="@drawable/widget_card_bg"
+        android:padding="10dp"
         android:layout_marginBottom="8dp">
 
         <RelativeLayout
@@ -66,54 +112,25 @@
                 android:id="@+id/pool1_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Claude Sonnet"
+                android:text="Claude"
                 android:textColor="#F4F4F5"
                 android:textSize="12sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/pool1_reset_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_toEndOf="@id/pool1_label"
+                android:layout_toStartOf="@id/pool1_percent"
+                android:layout_centerVertical="true"
+                android:layout_marginStart="8dp"
+                android:text=""
+                android:textColor="#9CA3AF"
+                android:textSize="9sp" />
 
             <TextView
                 android:id="@+id/pool1_percent"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
-                android:text="100%"
-                android:textColor="#38BDF8"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-        </RelativeLayout>
-
-        <ProgressBar
-            android:id="@+id/pool1_progress"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="6dp"
-            android:layout_marginTop="3dp"
-            android:max="100"
-            android:progress="100" />
-    </LinearLayout>
-
-    <!-- Pool 2 Row (Gemini) -->
-    <LinearLayout
-        android:id="@+id/pool2_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical">
-
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-
-            <TextView
-                android:id="@+id/pool2_label"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Gemini 1.5 Pro"
-                android:textColor="#F4F4F5"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/pool2_percent"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_alignParentEnd="true"
@@ -124,12 +141,95 @@
         </RelativeLayout>
 
         <ProgressBar
+            android:id="@+id/pool1_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:layout_marginTop="6dp"
+            android:progressDrawable="@drawable/progress_bar_custom_claude"
+            android:max="100"
+            android:progress="100" />
+    </LinearLayout>
+
+    <!-- Quota Pool 2 Card (Gemini) -->
+    <LinearLayout
+        android:id="@+id/pool2_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/widget_card_bg"
+        android:padding="10dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:id="@+id/pool2_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Gemini"
+                android:textColor="#F4F4F5"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/pool2_reset_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_toEndOf="@id/pool2_label"
+                android:layout_toStartOf="@id/pool2_percent"
+                android:layout_centerVertical="true"
+                android:layout_marginStart="8dp"
+                android:text=""
+                android:textColor="#9CA3AF"
+                android:textSize="9sp" />
+
+            <TextView
+                android:id="@+id/pool2_percent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:text="100%"
+                android:textColor="#38BDF8"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </RelativeLayout>
+
+        <ProgressBar
             android:id="@+id/pool2_progress"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
             android:layout_height="6dp"
-            android:layout_marginTop="3dp"
+            android:layout_marginTop="6dp"
+            android:progressDrawable="@drawable/progress_bar_custom_gemini"
             android:max="100"
             android:progress="100" />
     </LinearLayout>
+
+    <!-- Bottom Footer Row -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp">
+
+        <TextView
+            android:id="@+id/widget_source_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentStart="true"
+            android:text="Cloud ☁️"
+            android:textColor="#71717A"
+            android:textSize="9sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_time_ago_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:text="Just now"
+            android:textColor="#71717A"
+            android:textSize="9sp" />
+    </RelativeLayout>
 </LinearLayout>

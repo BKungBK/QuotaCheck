@@ -82,7 +82,9 @@ impl Default for Cache {
 }
 
 fn get_app_dir() -> PathBuf {
-    let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
+    let mut path = dirs::data_dir()
+        .or_else(dirs::config_dir)
+        .unwrap_or_else(|| std::env::temp_dir());
     path.push("antigravity-quota-widget");
     let _ = fs::create_dir_all(&path);
     path
