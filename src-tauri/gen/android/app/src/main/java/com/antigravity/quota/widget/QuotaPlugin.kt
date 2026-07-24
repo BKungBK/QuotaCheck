@@ -39,8 +39,12 @@ class QuotaPlugin(private val activity: Activity) : Plugin(activity) {
                     EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                     EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
                 )
-            } catch (e: Exception) {
-                context.applicationContext.getSharedPreferences("quotacheck_prefs", Context.MODE_PRIVATE)
+            } catch (_: Throwable) {
+                try {
+                    context.applicationContext.getSharedPreferences("quotacheck_prefs", Context.MODE_PRIVATE)
+                } catch (_: Throwable) {
+                    context.getSharedPreferences("quotacheck_prefs", Context.MODE_PRIVATE)
+                }
             }
         }
     }
