@@ -33,13 +33,19 @@
   });
 
   let statusMsg = $state("");
+  let tokenStatusMsg = $state("");
   let isSaving = $state(false);
+  let isSavingToken = $state(false);
   let monitorCount = $state(1);
+  let refreshTokenInput = $state("");
 
   onMount(async () => {
     try {
       const loaded = await invoke<Config>("get_config");
       config = loaded;
+      if (config.refresh_token_override) {
+        refreshTokenInput = config.refresh_token_override;
+      }
     } catch (e) {
       console.error("Failed to load config", e);
     }
@@ -51,10 +57,30 @@
     }
   });
 
+  async function handleSaveToken() {
+    if (!refreshTokenInput.trim()) return;
+    isSavingToken = true;
+    tokenStatusMsg = "";
+    try {
+      // 1. Try Android EncryptedSharedPreferences plugin
+      await invoke("plugin:quota|saveRefreshToken", { token: refreshTokenInput.trim() });
+      tokenStatusMsg = "Token saved to Android Secure Storage & Sync Triggered!";
+    } catch (_e) {
+      // 2. Desktop config fallback
+      config.refresh_token_override = refreshTokenInput.trim();
+      await invoke("save_config", { newConfig: config });
+      tokenStatusMsg = "Token saved to Config!";
+    } finally {
+      isSavingToken = false;
+      setTimeout(() => { tokenStatusMsg = ""; }, 3000);
+    }
+  }
+
   async function handleSave() {
     isSaving = true;
     statusMsg = "";
     try {
+      config.refresh_token_override = refreshTokenInput.trim();
       await invoke("save_config", { newConfig: config });
       statusMsg = "Saved & Applied Successfully!";
       setTimeout(() => { statusMsg = ""; }, 3000);
@@ -64,14 +90,65 @@
       isSaving = false;
     }
   }
+
+  function goBack() {
+    window.location.href = "/";
+  }
 </script>
 
 <div class="settings-container">
-  <h2>QuotaCheck Settings</h2>
+  <div class="header-nav">
+    <button type="button" class="btn-back" onclick={goBack}>
+      ← Back
+    </button>
+    <h2>QuotaCheck Settings</h2>
+  </div>
+
+  <!-- OAuth Refresh Token Section (High Priority for Mobile) -->
+  <div class="token-card">
+    <div class="card-header">
+      <h3>🔑 OAuth Refresh Token</h3>
+    </div>
+    <p class="card-desc">
+      Required for Mobile / Standalone mode without running IDE process on device.
+      Copy from <code>C:\Users\KK\.antigravity_cockpit\credentials.json</code> on your PC.
+    </p>
+
+    <div class="token-input-group">
+      <input
+        type="password"
+        placeholder="Paste Refresh Token (1//0...)"
+        bind:value={refreshTokenInput}
+      />
+      <button type="button" class="btn-primary" onclick={handleSaveToken} disabled={isSavingToken}>
+        {isSavingToken ? "Saving..." : "Save & Sync"}
+      </button>
+    </div>
+    {#if tokenStatusMsg}
+      <span class="status-msg green">{tokenStatusMsg}</span>
+    {/if}
+  </div>
 
   <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
     <div class="form-group">
-      <label for="corner">Position Corner</label>
+      <label for="quota_source_mode">Quota Source Mode</label>
+      <select id="quota_source_mode" bind:value={config.quota_source_mode}>
+        <option value="auto">Auto (Local First → Cloud Fallback)</option>
+        <option value="local">Local Language Server Only</option>
+        <option value="cloud">Cloud OAuth API Only</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="display_mode">Display Mode</label>
+      <select id="display_mode" bind:value={config.display_mode}>
+        <option value="summary">Summary (Gemini & Claude Merged)</option>
+        <option value="detailed">Detailed (All Individual Models)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="corner">Desktop Position Corner</label>
       <select id="corner" bind:value={config.position_corner}>
         <option value="bottom-right">Bottom Right</option>
         <option value="bottom-left">Bottom Left</option>
@@ -108,23 +185,6 @@
     </div>
 
     <div class="form-group">
-      <label for="quota_source_mode">Quota Source Mode</label>
-      <select id="quota_source_mode" bind:value={config.quota_source_mode}>
-        <option value="auto">Auto (Local First → Cloud Fallback)</option>
-        <option value="local">Local Language Server Only</option>
-        <option value="cloud">Cloud OAuth API Only</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="display_mode">Display Mode</label>
-      <select id="display_mode" bind:value={config.display_mode}>
-        <option value="summary">Summary (Gemini & Claude Merged)</option>
-        <option value="detailed">Detailed (All Individual Models)</option>
-      </select>
-    </div>
-
-    <div class="form-group">
       <label for="preferred_account">Preferred Account Email (Optional)</label>
       <input id="preferred_account" type="text" bind:value={config.preferred_account} placeholder="user@gmail.com" />
     </div>
@@ -143,28 +203,9 @@
       </label>
     </div>
 
-    <!-- Android Specific Settings Card -->
-    <div class="android-card">
-      <h3>Android Background & Notifications</h3>
-      <p class="card-desc">Ensure timely background quota updates and home widget synchronization on Android devices.</p>
-      
-      <div class="card-action">
-        <span>Battery Optimization</span>
-        <button type="button" class="btn-secondary" onclick={() => {
-          try {
-            invoke("triggerManualSync");
-          } catch (e) {
-            console.log("Android battery optimization action triggered");
-          }
-        }}>
-          Optimize Settings
-        </button>
-      </div>
-    </div>
-
     <div class="form-actions">
-      <button type="submit" disabled={isSaving}>
-        {isSaving ? "Saving..." : "Save & Apply"}
+      <button type="submit" class="btn-primary" disabled={isSaving}>
+        {isSaving ? "Saving..." : "Save All Settings"}
       </button>
       {#if statusMsg}
         <span class="status-msg">{statusMsg}</span>
@@ -177,24 +218,79 @@
   :global(body) {
     margin: 0;
     padding: 0;
-    font-family: "Inter", system-ui, sans-serif;
-    background: oklch(14% 0 0);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    background: oklch(12% 0 0);
     color: oklch(90% 0 0);
     user-select: none;
   }
 
   .settings-container {
-    padding: 20px;
+    padding: 16px;
     box-sizing: border-box;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  .header-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .btn-back {
+    padding: 6px 12px;
+    background: oklch(22% 0 0);
+    border: 1px solid oklch(30% 0 0);
+    border-radius: 6px;
+    color: oklch(90% 0 0);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
   }
 
   h2 {
-    font-size: 1rem;
-    font-weight: 600;
-    margin-top: 0;
-    margin-bottom: 16px;
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin: 0;
+    color: oklch(96% 0 0);
+  }
+
+  .token-card {
+    background: oklch(18% 0 0);
+    border: 1px solid oklch(28% 0 0);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 20px;
+  }
+
+  .token-card h3 {
+    margin: 0 0 6px 0;
+    font-size: 0.9375rem;
     color: oklch(95% 0 0);
-    letter-spacing: -0.01em;
+  }
+
+  .card-desc {
+    margin: 0 0 12px 0;
+    font-size: 0.75rem;
+    color: oklch(65% 0 0);
+    line-height: 1.4;
+  }
+
+  .card-desc code {
+    background: oklch(12% 0 0);
+    padding: 2px 5px;
+    border-radius: 4px;
+    color: oklch(80% 0.1 230);
+  }
+
+  .token-input-group {
+    display: flex;
+    gap: 8px;
+  }
+
+  .token-input-group input {
+    flex: 1;
   }
 
   form {
@@ -219,25 +315,26 @@
 
   label {
     font-size: 0.75rem;
-    font-weight: 500;
-    color: oklch(70% 0 0);
+    font-weight: 600;
+    color: oklch(75% 0 0);
   }
 
   input[type="number"],
   input[type="text"],
+  input[type="password"],
   select {
-    padding: 8px 10px;
+    padding: 9px 12px;
     border-radius: 6px;
     border: 1px solid oklch(28% 0 0);
-    background: oklch(20% 0 0);
-    color: oklch(90% 0 0);
+    background: oklch(18% 0 0);
+    color: oklch(95% 0 0);
     font-size: 0.8125rem;
     outline: none;
     transition: border-color 0.2s;
   }
 
   input:focus, select:focus {
-    border-color: oklch(55% 0 0);
+    border-color: oklch(60% 0.15 230);
   }
 
   .checkbox-group label {
@@ -248,16 +345,16 @@
   }
 
   .form-actions {
-    margin-top: 8px;
+    margin-top: 10px;
     display: flex;
     align-items: center;
     gap: 12px;
   }
 
-  button {
-    padding: 9px 16px;
-    background: oklch(40% 0 0);
-    color: oklch(95% 0 0);
+  .btn-primary {
+    padding: 10px 18px;
+    background: oklch(48% 0.16 230);
+    color: #fff;
     border: none;
     border-radius: 6px;
     font-weight: 600;
@@ -266,56 +363,13 @@
     transition: background 0.2s;
   }
 
-  button:hover:not(:disabled) {
-    background: oklch(50% 0 0);
+  .btn-primary:hover:not(:disabled) {
+    background: oklch(55% 0.16 230);
   }
 
-  button:disabled {
+  .btn-primary:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-  }
-
-  .android-card {
-    margin-top: 8px;
-    padding: 12px;
-    background: oklch(18% 0 0);
-    border: 1px solid oklch(26% 0 0);
-    border-radius: 8px;
-  }
-
-  .android-card h3 {
-    margin: 0 0 4px 0;
-    font-size: 0.8125rem;
-    color: oklch(90% 0 0);
-    font-weight: 600;
-  }
-
-  .card-desc {
-    margin: 0 0 10px 0;
-    font-size: 0.725rem;
-    color: oklch(65% 0 0);
-    line-height: 1.35;
-  }
-
-  .card-action {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.75rem;
-    color: oklch(80% 0 0);
-  }
-
-  .btn-secondary {
-    padding: 5px 10px;
-    background: oklch(28% 0 0);
-    color: oklch(85% 0 0);
-    font-size: 0.75rem;
-    border-radius: 4px;
-    border: 1px solid oklch(34% 0 0);
-  }
-
-  .btn-secondary:hover {
-    background: oklch(35% 0 0);
   }
 
   .status-msg {
