@@ -311,29 +311,23 @@
               </h3>
               
               <p class="offline-body">
-                Set up an OAuth Refresh Token to enable direct cloud sync on Android.
+                Paste your OAuth Refresh Token below to enable direct cloud sync on Android without opening Settings.
               </p>
 
-              <button class="material-btn ripple-btn" onclick={() => s.showTokenInput = !s.showTokenInput}>
-                {s.showTokenInput ? 'Close Setup' : '⚙️ Setup OAuth Token'}
-              </button>
-
-              {#if s.showTokenInput}
-                <div class="token-sheet-box">
-                  <input
-                    type="password"
-                    class="material-input"
-                    placeholder="Paste OAuth Refresh Token..."
-                    bind:value={s.tokenInput}
-                  />
-                  <button class="material-btn material-btn--primary ripple-btn" onclick={handleSaveToken}>
-                    Save & Sync
-                  </button>
-                  {#if s.tokenSaveStatus}
-                    <span class="save-status-text">{s.tokenSaveStatus}</span>
-                  {/if}
-                </div>
-              {/if}
+              <div class="token-sheet-box">
+                <input
+                  type="password"
+                  class="material-input"
+                  placeholder="Paste OAuth Refresh Token (1//0...)"
+                  bind:value={s.tokenInput}
+                />
+                <button class="material-btn material-btn--primary ripple-btn" onclick={handleSaveToken}>
+                  Save & Sync Quota
+                </button>
+                {#if s.tokenSaveStatus}
+                  <span class="save-status-text">{s.tokenSaveStatus}</span>
+                {/if}
+              </div>
             </div>
           {/each}
         {/if}
