@@ -84,6 +84,14 @@
   function goBack() {
     window.location.href = "/";
   }
+
+  async function handleOpenNotificationSettings() {
+    try {
+      await invoke("plugin:quota|openNotificationSettings");
+    } catch (e) {
+      console.error("Failed to open notification settings", e);
+    }
+  }
 </script>
 
 {#if isMobilePlatform}
@@ -117,6 +125,18 @@
       {#if tokenStatusMsg}
         <span class="status-msg green">{tokenStatusMsg}</span>
       {/if}
+    </div>
+
+    <div class="notification-card">
+      <div class="card-header">
+        <h3>🔔 App Notifications</h3>
+      </div>
+      <p class="card-desc">
+        Manage background alert permissions and status notifications in system settings.
+      </p>
+      <button type="button" class="btn-primary" onclick={handleOpenNotificationSettings}>
+        Open Notification Settings
+      </button>
     </div>
 
     <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
@@ -243,8 +263,8 @@
     margin: 0;
     padding: 0;
     font-family: "Inter", system-ui, sans-serif;
-    background: oklch(14% 0 0);
-    color: oklch(90% 0 0);
+    background: var(--color-bg);
+    color: var(--color-ink-high);
     user-select: none;
   }
 
@@ -256,7 +276,7 @@
   .settings-container.mobile-view {
     max-width: 500px;
     margin: 0 auto;
-    padding: 16px;
+    padding: max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px)) 16px;
   }
 
   .header-nav {
@@ -268,10 +288,10 @@
 
   .btn-back {
     padding: 6px 12px;
-    background: oklch(22% 0 0);
-    border: 1px solid oklch(30% 0 0);
+    background: var(--color-surface-variant);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    color: oklch(90% 0 0);
+    color: var(--color-ink-high);
     font-size: 0.8125rem;
     font-weight: 600;
     cursor: pointer;
@@ -282,7 +302,7 @@
     font-weight: 600;
     margin-top: 0;
     margin-bottom: 16px;
-    color: oklch(95% 0 0);
+    color: var(--color-ink-high);
     letter-spacing: -0.01em;
   }
 
@@ -291,32 +311,34 @@
     font-size: 1.125rem;
   }
 
-  .token-card {
-    background: oklch(18% 0 0);
-    border: 1px solid oklch(28% 0 0);
+  .token-card,
+  .notification-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
     border-radius: 10px;
     padding: 14px;
     margin-bottom: 20px;
   }
 
-  .token-card h3 {
+  .token-card h3,
+  .notification-card h3 {
     margin: 0 0 6px 0;
     font-size: 0.9375rem;
-    color: oklch(95% 0 0);
+    color: var(--color-ink-high);
   }
 
   .card-desc {
     margin: 0 0 12px 0;
     font-size: 0.75rem;
-    color: oklch(65% 0 0);
+    color: var(--color-ink-mid);
     line-height: 1.4;
   }
 
   .card-desc code {
-    background: oklch(12% 0 0);
+    background: var(--color-bg);
     padding: 2px 5px;
     border-radius: 4px;
-    color: oklch(80% 0.1 230);
+    color: var(--color-accent);
   }
 
   .token-input-group {
@@ -326,6 +348,17 @@
 
   .token-input-group input {
     flex: 1;
+  }
+
+  @media (max-width: 380px) {
+    .token-input-group {
+      flex-direction: column;
+    }
+
+    .token-input-group input,
+    .token-input-group button {
+      width: 100%;
+    }
   }
 
   form {
@@ -351,7 +384,7 @@
   label {
     font-size: 0.75rem;
     font-weight: 500;
-    color: oklch(70% 0 0);
+    color: var(--color-ink-mid);
   }
 
   input[type="number"],
@@ -360,16 +393,16 @@
   select {
     padding: 8px 10px;
     border-radius: 6px;
-    border: 1px solid oklch(28% 0 0);
-    background: oklch(20% 0 0);
-    color: oklch(90% 0 0);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-ink-high);
     font-size: 0.8125rem;
     outline: none;
     transition: border-color 0.2s;
   }
 
   input:focus, select:focus {
-    border-color: oklch(55% 0 0);
+    border-color: var(--color-accent);
   }
 
   .checkbox-group label {
@@ -388,8 +421,8 @@
 
   button {
     padding: 9px 16px;
-    background: oklch(40% 0 0);
-    color: oklch(95% 0 0);
+    background: var(--color-surface-variant);
+    color: var(--color-ink-high);
     border: none;
     border-radius: 6px;
     font-weight: 600;
@@ -399,16 +432,16 @@
   }
 
   .btn-primary {
-    background: oklch(48% 0.16 230);
+    background: var(--color-accent);
     color: #fff;
   }
 
   button:hover:not(:disabled) {
-    background: oklch(50% 0 0);
+    background: var(--color-ink-dim);
   }
 
   .btn-primary:hover:not(:disabled) {
-    background: oklch(55% 0.16 230);
+    background: var(--color-accent-glow);
   }
 
   button:disabled {
@@ -418,6 +451,6 @@
 
   .status-msg {
     font-size: 0.75rem;
-    color: oklch(75% 0.15 140);
+    color: var(--color-dot-live);
   }
 </style>

@@ -13,6 +13,7 @@
   // ── Toast Notification System ──────────────────────────────────────────────
   let toastText = $state('');
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  let showNotificationBanner = $state(false);
 
   function showToast(message: string) {
     toastText = message;
@@ -20,6 +21,19 @@
     toastTimer = setTimeout(() => {
       toastText = '';
     }, 2400);
+  }
+
+  async function handleRequestNotificationPermission() {
+    try {
+      await invoke('plugin:quota|requestNotificationPermission');
+      const res = await invoke<{ granted: boolean }>('plugin:quota|checkNotificationPermission');
+      if (res && res.granted) {
+        showNotificationBanner = false;
+        showToast('Notifications enabled');
+      }
+    } catch (_e) {
+      // Fallback
+    }
   }
 
   // ── Detail Bottom Sheet Modal ──────────────────────────────────────────────
@@ -133,12 +147,13 @@
     }
   }
 
-  // ── Mobile-only: save token via Kotlin plugin ──────────────────────────────
+  // ── Mobile-only: save token via Kotlin plugin, fallback to Config ─────────
   async function handleSaveToken() {
-    if (!s.tokenInput.trim()) return;
+    const token = s.tokenInput.trim();
+    if (!token) return;
     s.tokenSaveStatus = 'Saving token...';
     try {
-      await invoke('plugin:quota|saveRefreshToken', { token: s.tokenInput.trim() });
+      await invoke('plugin:quota|saveRefreshToken', { token });
       s.tokenSaveStatus = 'Token saved! Syncing...';
       showToast('OAuth Token Saved');
       setTimeout(async () => {
@@ -146,9 +161,23 @@
         s.showTokenInput = false;
         s.tokenSaveStatus = '';
       }, 1000);
-    } catch (_e) {
-      s.tokenSaveStatus = 'Saved to config';
-      showToast('Token Saved');
+    } catch (_pluginErr) {
+      try {
+        const cfg = await invoke<Config>('get_config');
+        cfg.refresh_token_override = token;
+        await invoke('save_config', { newConfig: cfg });
+        s.tokenSaveStatus = 'Token saved to config!';
+        showToast('Token Saved to Config');
+        setTimeout(async () => {
+          await handleRefresh();
+          s.showTokenInput = false;
+          s.tokenSaveStatus = '';
+        }, 1000);
+      } catch (cfgErr) {
+        console.error('Failed to save token to config fallback:', cfgErr);
+        s.tokenSaveStatus = 'Failed to save token';
+        showToast('Failed to Save Token');
+      }
     }
   }
 
@@ -164,6 +193,15 @@
         }
       } catch (e) {
         console.error('Failed to load config in page', e);
+      }
+
+      try {
+        const res = await invoke<{ granted: boolean }>('plugin:quota|checkNotificationPermission');
+        if (res && res.granted === false) {
+          showNotificationBanner = true;
+        }
+      } catch (_e) {
+        // Plugin not ready or non-Android platform
       }
 
       await loadQuotaData();
@@ -229,6 +267,30 @@
     ontouchmove={handleTouchMove}
     ontouchend={handleTouchEnd}
   >
+    <!-- Notification Permission Prompt Banner -->
+    {#if showNotificationBanner}
+      <div class="notification-banner">
+        <div class="banner-content">
+          <svg class="banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <div class="banner-text">
+            <span class="banner-title">Notifications Disabled</span>
+            <span class="banner-sub">Enable background quota alerts & sync status</span>
+          </div>
+        </div>
+        <div class="banner-actions">
+          <button class="banner-btn banner-btn--primary ripple-btn" onclick={handleRequestNotificationPermission}>
+            Enable
+          </button>
+          <button class="banner-btn banner-btn--dismiss ripple-btn" onclick={() => showNotificationBanner = false} aria-label="Dismiss banner">
+            ✕
+          </button>
+        </div>
+      </div>
+    {/if}
+
     <!-- Hero Status Card (Material Overview) -->
     <section class="hero-card">
       <div class="hero-header">
@@ -468,6 +530,67 @@
     overflow: hidden;
     user-select: none;
     position: relative;
+  }
+
+  /* Notification Permission Banner */
+  .notification-banner {
+    background: oklch(20% 0.04 260);
+    border: 1px solid oklch(30% 0.05 260);
+    border-radius: 16px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-shadow: 0 4px 12px oklch(0% 0 0 / 0.2);
+  }
+  .banner-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+  }
+  .banner-icon {
+    width: 22px;
+    height: 22px;
+    color: var(--color-accent);
+    flex-shrink: 0;
+  }
+  .banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .banner-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--color-ink-high);
+  }
+  .banner-sub {
+    font-size: 0.75rem;
+    color: var(--color-ink-muted);
+  }
+  .banner-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .banner-btn {
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+  }
+  .banner-btn--primary {
+    background: var(--color-accent);
+    color: oklch(10% 0 0);
+  }
+  .banner-btn--dismiss {
+    background: oklch(26% 0.02 260);
+    color: var(--color-ink-muted);
+    padding: 6px 10px;
   }
 
   /* Pull to Refresh Spinner Bar */
