@@ -187,7 +187,7 @@
     --color-accent-glow: oklch(48% 0 0 / 0.5);
 
     /* Bar colors */
-    --color-bar-track:   oklch(20% 0 0 / 0.5);
+    --color-bar-track:   oklch(25% 0 0 / 0.7);
     --color-bar-offline: oklch(36% 0 0);
     --color-bar-low:     oklch(42% 0 0);
 
@@ -279,7 +279,7 @@
     flex-direction: column;
     gap: 0;
     flex-grow: 1;
-    justify-content: flex-start;
+    justify-content: center;
     margin: 6px 0;
     overflow-y: auto;
     scrollbar-width: thin;
