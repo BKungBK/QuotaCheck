@@ -87,7 +87,7 @@
 <main
   class="widget"
   class:offline={s.isOffline && s.pools.length === 0}
-  id="quota-widget"
+  id="desktop-widget-root"
   aria-label="Antigravity Quota Widget"
 >
   <div class="row-top">
@@ -196,7 +196,7 @@
     --color-dot-live-glow: oklch(75% 0 0 / 0.4);
   }
 
-  :global(html, body) {
+  :global(html:has(#desktop-widget-root), body:has(#desktop-widget-root)) {
     margin: 0;
     padding: 0;
     background: transparent !important;
@@ -208,11 +208,6 @@
     50%       { opacity: 0.8; box-shadow: 0 0 0 3px oklch(68% 0.17 160 / 0); }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .widget { transition: none; }
-    .dot-live { animation: none; }
-    :global(.bar-fill) { transition: none; }
-  }
 
   .widget {
     width: 100vw;
