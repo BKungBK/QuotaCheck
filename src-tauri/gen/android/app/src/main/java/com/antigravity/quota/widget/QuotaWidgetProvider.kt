@@ -15,6 +15,14 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
+object WidgetColors {
+    val ACCENT = Color.parseColor("#38BDF8")
+    val DOT_LIVE = Color.parseColor("#22C55E")
+    val DOT_STALE = Color.parseColor("#EAB308")
+    val DOT_OFFLINE = Color.parseColor("#71717A")
+    val LOW_REMAINING = Color.parseColor("#EF4444")
+}
+
 class QuotaWidgetProvider : AppWidgetProvider() {
 
     companion object {
@@ -82,12 +90,12 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                     if (isOffline) {
                         views.setImageViewResource(R.id.widget_status_dot, R.drawable.dot_offline)
                         views.setTextViewText(R.id.widget_status_text, "OFFLINE")
-                        views.setTextColor(R.id.widget_status_text, Color.parseColor("#71717A"))
+                        views.setTextColor(R.id.widget_status_text, WidgetColors.DOT_OFFLINE)
                         views.setTextViewText(R.id.widget_source_text, "Offline 🔴")
                     } else {
                         views.setImageViewResource(R.id.widget_status_dot, R.drawable.dot_live)
                         views.setTextViewText(R.id.widget_status_text, "LIVE")
-                        views.setTextColor(R.id.widget_status_text, Color.parseColor("#22C55E"))
+                        views.setTextColor(R.id.widget_status_text, WidgetColors.DOT_LIVE)
                         val srcLabel = if (source == "local") "Local 🟢" else "Cloud ☁️"
                         views.setTextViewText(R.id.widget_source_text, srcLabel)
                     }
@@ -102,7 +110,7 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                             val rem = p1.optDouble("remaining_fraction", 1.0)
                             val resetStr = p1.optString("reset_time", "")
                             val pct = (rem * 100).toInt().coerceIn(0, 100)
-                            val textColor = if (pct <= 20) Color.parseColor("#EF4444") else Color.parseColor("#38BDF8")
+                            val textColor = if (pct <= 20) WidgetColors.LOW_REMAINING else WidgetColors.ACCENT
 
                             views.setTextViewText(R.id.pool1_label, label)
                             views.setTextViewText(R.id.pool1_percent, "$pct%")
@@ -120,7 +128,7 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                                 val rem = p2.optDouble("remaining_fraction", 1.0)
                                 val resetStr = p2.optString("reset_time", "")
                                 val pct = (rem * 100).toInt().coerceIn(0, 100)
-                                val textColor = if (pct <= 20) Color.parseColor("#EF4444") else Color.parseColor("#38BDF8")
+                                val textColor = if (pct <= 20) WidgetColors.LOW_REMAINING else WidgetColors.ACCENT
 
                                 views.setTextViewText(R.id.pool2_label, label)
                                 views.setTextViewText(R.id.pool2_percent, "$pct%")
