@@ -7,7 +7,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GWLP_WNDPROC, WNDPROC, CallWindowProcW,
     WS_CHILD, WS_VISIBLE, WS_CLIPSIBLINGS, WS_CLIPCHILDREN,
     WS_EX_TRANSPARENT, SMTO_NORMAL, GetWindow, GW_HWNDNEXT,
-    SetWindowPos, SWP_NOZORDER, SWP_FRAMECHANGED,
+    SetWindowPos, SWP_NOZORDER, SWP_FRAMECHANGED, GetParent, GetWindowRect,
 };
 use windows::Win32::Graphics::Gdi::{
     MonitorFromWindow, GetMonitorInfoW, EnumDisplayMonitors, HDC, HMONITOR, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
@@ -180,28 +180,41 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
 
         let workerw = context.workerw_hwnd.ok_or_else(|| "Failed to find WorkerW window".to_string())?;
 
-        // 3. Reparent the Tauri window to WorkerW
-        let _ = SetParent(tauri_hwnd, Some(workerw));
+        // 3. Reparent the Tauri window to WorkerW ONLY if not already parented
+        let current_parent = GetParent(tauri_hwnd).unwrap_or_default();
+        let parent_changed = current_parent != workerw;
+        if parent_changed {
+            let _ = SetParent(tauri_hwnd, Some(workerw));
+        }
 
-        // 4. Force pure borderless child window styles with no decorations
+        // 4. Force pure borderless child window styles ONLY if changed
         let new_style = WS_CHILD.0 | WS_VISIBLE.0 | WS_CLIPSIBLINGS.0 | WS_CLIPCHILDREN.0;
-        let _ = SetWindowLongPtrW(
-            tauri_hwnd,
-            GWL_STYLE,
-            new_style as isize,
-        );
+        let current_style = GetWindowLongPtrW(tauri_hwnd, GWL_STYLE);
+        let style_changed = current_style != new_style as isize;
+        if style_changed {
+            let _ = SetWindowLongPtrW(
+                tauri_hwnd,
+                GWL_STYLE,
+                new_style as isize,
+            );
+        }
 
-        // 5. Make the window Click-through and Layered (transparent/overlay support)
-        let mut ex_style = GetWindowLongPtrW(tauri_hwnd, GWL_EXSTYLE);
-        ex_style &= !(windows::Win32::UI::WindowsAndMessaging::WS_EX_CLIENTEDGE.0
+        // 5. Make the window Click-through and Layered ONLY if changed
+        let current_ex_style = GetWindowLongPtrW(tauri_hwnd, GWL_EXSTYLE);
+        let target_ex_style = (current_ex_style & !(
+            windows::Win32::UI::WindowsAndMessaging::WS_EX_CLIENTEDGE.0
             | windows::Win32::UI::WindowsAndMessaging::WS_EX_WINDOWEDGE.0
             | windows::Win32::UI::WindowsAndMessaging::WS_EX_DLGMODALFRAME.0
-            | windows::Win32::UI::WindowsAndMessaging::WS_EX_STATICEDGE.0) as isize;
-        let _ = SetWindowLongPtrW(
-            tauri_hwnd,
-            GWL_EXSTYLE,
-            ex_style | WS_EX_TRANSPARENT.0 as isize,
-        );
+            | windows::Win32::UI::WindowsAndMessaging::WS_EX_STATICEDGE.0
+        ) as isize) | WS_EX_TRANSPARENT.0 as isize;
+        let ex_style_changed = current_ex_style != target_ex_style;
+        if ex_style_changed {
+            let _ = SetWindowLongPtrW(
+                tauri_hwnd,
+                GWL_EXSTYLE,
+                target_ex_style,
+            );
+        }
 
         // 6. Calculate position based on Config and GDI Work Area for selected monitor_index
         let config = crate::config::load_config();
@@ -240,16 +253,25 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
             }
         }
 
-        // 7. Position, resize, and trigger frame changed update
-        let _ = SetWindowPos(
-            tauri_hwnd,
-            None,
-            x,
-            y,
-            widget_w,
-            widget_h,
-            SWP_NOZORDER | SWP_FRAMECHANGED,
-        );
+        // 7. Check current rect to avoid unnecessary SetWindowPos SWP_FRAMECHANGED calls
+        let mut current_rect = RECT::default();
+        let _ = GetWindowRect(tauri_hwnd, &mut current_rect);
+        let current_w = current_rect.right - current_rect.left;
+        let current_h = current_rect.bottom - current_rect.top;
+        let pos_changed = current_rect.left != x || current_rect.top != y || current_w != widget_w || current_h != widget_h;
+
+        // Position, resize, and trigger frame changed update ONLY when something actually changed
+        if parent_changed || style_changed || ex_style_changed || pos_changed {
+            let _ = SetWindowPos(
+                tauri_hwnd,
+                None,
+                x,
+                y,
+                widget_w,
+                widget_h,
+                SWP_NOZORDER | SWP_FRAMECHANGED,
+            );
+        }
 
         Ok(())
     }

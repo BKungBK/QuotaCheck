@@ -47,7 +47,7 @@ class QuotaStore {
 
   /** Short status text for the live badge */
   statusLabel = $derived.by(() => {
-    if (this.isLoading || this.isRefreshing) return 'syncing...';
+    if (this.isLoading || this.isRefreshing) return 'loading...';
     if (this.isOffline) {
       if (this.errorReason === 'process_not_found') return 'process not found';
       return 'offline';
@@ -73,9 +73,9 @@ class QuotaStore {
     if (!this.lastUpdated) return 'Never';
     const diffSecs = Math.floor((this.now - new Date(this.lastUpdated).getTime()) / 1000);
     if (diffSecs < 10) return 'Now';
-    if (diffSecs < 60) return `${diffSecs}s ago`;
+    if (diffSecs < 60) return `${diffSecs}s`;
     const mins = Math.floor(diffSecs / 60);
-    return mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`;
+    return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h`;
   });
 
   // ── Methods ─────────────────────────────────────────────────────────────────

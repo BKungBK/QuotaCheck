@@ -115,29 +115,45 @@ struct QuotaInfo {
     reset_time: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct ClientModelConfig {
     label: String,
     #[serde(rename = "quotaInfo")]
     quota_info: Option<QuotaInfo>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct CascadeModelConfigData {
     #[serde(rename = "clientModelConfigs")]
     client_model_configs: Vec<ClientModelConfig>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct UserStatusDetail {
     #[serde(rename = "cascadeModelConfigData")]
     cascade_model_config_data: Option<CascadeModelConfigData>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
+struct UserStatusResponseInner {
+    #[serde(rename = "userStatus")]
+    user_status: Option<UserStatusDetail>,
+}
+
+#[derive(Deserialize, Debug, Default)]
 struct UserStatusResponse {
     #[serde(rename = "userStatus")]
     user_status: Option<UserStatusDetail>,
+    #[serde(default)]
+    response: Option<UserStatusResponseInner>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+struct QuotaSummaryInner {
+    #[serde(default)]
+    groups: Option<Vec<BackendQuotaGroup>>,
+    #[serde(default)]
+    pools: Option<Vec<BackendQuotaPool>>,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -146,6 +162,10 @@ struct RetrieveUserQuotaSummaryResponse {
     groups: Option<Vec<BackendQuotaGroup>>,
     #[serde(default)]
     pools: Option<Vec<BackendQuotaPool>>,
+    #[serde(default, rename = "userQuotaSummary")]
+    user_quota_summary: Option<QuotaSummaryInner>,
+    #[serde(default)]
+    response: Option<QuotaSummaryInner>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -431,7 +451,11 @@ fn parse_summary_pools(parsed: &RetrieveUserQuotaSummaryResponse, display_mode: 
     }
 
     let mut summary_pools = Vec::new();
-    if let Some(ref groups) = parsed.groups {
+    let groups_opt = parsed.groups.as_ref()
+        .or_else(|| parsed.user_quota_summary.as_ref().and_then(|u| u.groups.as_ref()))
+        .or_else(|| parsed.response.as_ref().and_then(|r| r.groups.as_ref()));
+
+    if let Some(groups) = groups_opt {
         let labels = ["Gemini", "Claude"];
         for label in &labels {
             let is_target_gemini = *label == "Gemini";
@@ -483,20 +507,15 @@ fn parse_summary_pools(parsed: &RetrieveUserQuotaSummaryResponse, display_mode: 
             }
 
             // Determine effective fraction and reset time:
-            // 1. If weekly quota is exhausted (weekly_frac <= 0.0), display 0% and weekly reset time so the user knows when weekly resets!
-            // 2. Else if 5h quota is exhausted (5h_frac <= 0.0), display 0% and 5h reset time (when 5h window refreshes).
-            // 3. Else if 5h quota exists, display 5h remaining fraction and 5h reset time (matching IDE UI display).
-            // 4. Otherwise fall back to weekly or min_fraction.
+            // Only switch to weekly quota and weekly reset time if BOTH 5h and weekly quota are <= 5% (0.05).
+            // Otherwise, display 5h quota remaining fraction and 5h reset time.
             let result = match (bucket_5h, bucket_weekly) {
                 (Some((f5, r5)), Some((fw, rw))) => {
-                    if fw <= 0.0 {
-                        // Weekly quota depleted! Show 0% and weekly reset time
-                        Some((0.0, rw.or(r5)))
-                    } else if f5 <= 0.0 {
-                        // 5h quota depleted! Show 0% and 5h reset time
-                        Some((0.0, r5.or(rw)))
+                    if f5 <= 0.05 && fw <= 0.05 {
+                        // Both depleted below 5%! Show weekly reset
+                        Some((fw, rw.or(r5)))
                     } else {
-                        // Both have balance: primary display is 5-hour quota and 5h reset time
+                        // Primary display is 5-hour quota and 5h reset time
                         Some((f5, r5.or(rw)))
                     }
                 }
@@ -522,7 +541,11 @@ fn parse_summary_pools(parsed: &RetrieveUserQuotaSummaryResponse, display_mode: 
     }
 
     if summary_pools.is_empty() {
-        if let Some(ref pools) = parsed.pools {
+        let raw_pools_opt = parsed.pools.as_ref()
+            .or_else(|| parsed.user_quota_summary.as_ref().and_then(|u| u.pools.as_ref()))
+            .or_else(|| parsed.response.as_ref().and_then(|r| r.pools.as_ref()));
+
+        if let Some(pools) = raw_pools_opt {
             for p in pools {
                 if let (Some(lbl), Some(rem)) = (&p.label, p.remaining_fraction) {
                     summary_pools.push(super::config::QuotaPool {
@@ -596,6 +619,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
     if let Ok(resp) = res_summary {
         if resp.status().is_success() {
             if let Ok(body) = resp.text().await {
+                append_debug_log(&format!("RetrieveUserQuotaSummary raw body:\n{}", body));
                 if let Ok(parsed) = serde_json::from_str::<RetrieveUserQuotaSummaryResponse>(&body) {
                     pools_result = parse_summary_pools(&parsed, display_mode);
                     if !pools_result.is_empty() {
@@ -654,12 +678,16 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
     }
 
     let body = res_status.text().await.map_err(|e| format!("Failed to read body: {}", e))?;
+    append_debug_log(&format!("GetUserStatus raw body:\n{}", body));
     let status_resp: UserStatusResponse = serde_json::from_str(&body)
         .map_err(|e| { append_debug_log(&format!("JSON parse error: {}", e)); format!("Failed to parse response: {}", e) })?;
 
-    let configs = status_resp.user_status
-        .and_then(|us| us.cascade_model_config_data)
-        .map(|d| d.client_model_configs)
+    let user_status_opt = status_resp.user_status.as_ref()
+        .or_else(|| status_resp.response.as_ref().and_then(|r| r.user_status.as_ref()));
+
+    let configs = user_status_opt
+        .and_then(|us| us.cascade_model_config_data.as_ref())
+        .map(|d| d.client_model_configs.clone())
         .unwrap_or_default();
 
     let mut fallback_pools = Vec::new();
@@ -677,8 +705,8 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
             }
         }
     } else {
-        let mut gemini_min: Option<(f64, Option<String>)> = None;
-        let mut claude_min: Option<(f64, Option<String>)> = None;
+        let mut gemini_models: Vec<(f64, Option<String>)> = Vec::new();
+        let mut claude_models: Vec<(f64, Option<String>)> = Vec::new();
 
         for c in configs {
             let label_lower = c.label.to_lowercase();
@@ -686,26 +714,32 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
                 if let Some(rem_frac) = q.remaining_fraction {
                     let reset = q.reset_time.clone();
                     if label_lower.starts_with("gemini") {
-                        if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                            gemini_min = Some((rem_frac, reset));
-                        }
+                        gemini_models.push((rem_frac, reset));
                     } else if label_lower.starts_with("claude") || label_lower.starts_with("gpt-oss") {
-                        if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                            claude_min = Some((rem_frac, reset));
-                        }
+                        claude_models.push((rem_frac, reset));
                     }
                 }
             }
         }
 
-        if let Some((frac, reset)) = gemini_min {
+        let select_model = |models: Vec<(f64, Option<String>)>| -> Option<(f64, Option<String>)> {
+            if models.is_empty() { return None; }
+            let all_below_5 = models.iter().all(|(rem, _)| *rem <= 0.05);
+            if all_below_5 {
+                models.into_iter().min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+            } else {
+                models.into_iter().max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+            }
+        };
+
+        if let Some((frac, reset)) = select_model(gemini_models) {
             fallback_pools.push(super::config::QuotaPool {
                 label: "Gemini".to_string(),
                 remaining_fraction: frac,
                 reset_time: reset,
             });
         }
-        if let Some((frac, reset)) = claude_min {
+        if let Some((frac, reset)) = select_model(claude_models) {
             fallback_pools.push(super::config::QuotaPool {
                 label: "Claude".to_string(),
                 remaining_fraction: frac,
@@ -1105,8 +1139,8 @@ pub async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config:
             }
         }
     } else {
-        let mut gemini_min: Option<(f64, Option<String>)> = None;
-        let mut claude_min: Option<(f64, Option<String>)> = None;
+        let mut gemini_models: Vec<(f64, Option<String>)> = Vec::new();
+        let mut claude_models: Vec<(f64, Option<String>)> = Vec::new();
 
         for (k, v) in quota_res_data.models {
             let label_lower = k.to_lowercase();
@@ -1115,26 +1149,32 @@ pub async fn fetch_cloud_quota(client: &reqwest::Client, config: &super::config:
                 if let Some(rem_frac) = q.remaining_fraction {
                     let reset = q.reset_time.clone();
                     if label_lower.contains("gemini") || display_lower.contains("gemini") {
-                        if gemini_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                            gemini_min = Some((rem_frac, reset));
-                        }
+                        gemini_models.push((rem_frac, reset));
                     } else if label_lower.contains("claude") || display_lower.contains("claude") || label_lower.contains("gpt-oss") || display_lower.contains("gpt-oss") {
-                        if claude_min.as_ref().map(|(min_frac, _)| rem_frac < *min_frac).unwrap_or(true) {
-                            claude_min = Some((rem_frac, reset));
-                        }
+                        claude_models.push((rem_frac, reset));
                     }
                 }
             }
         }
 
-        if let Some((frac, reset)) = gemini_min {
+        let select_model = |models: Vec<(f64, Option<String>)>| -> Option<(f64, Option<String>)> {
+            if models.is_empty() { return None; }
+            let all_below_5 = models.iter().all(|(rem, _)| *rem <= 0.05);
+            if all_below_5 {
+                models.into_iter().min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+            } else {
+                models.into_iter().max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+            }
+        };
+
+        if let Some((frac, reset)) = select_model(gemini_models) {
             cloud_fallback_pools.push(super::config::QuotaPool {
                 label: "Gemini".to_string(),
                 remaining_fraction: frac,
                 reset_time: reset,
             });
         }
-        if let Some((frac, reset)) = claude_min {
+        if let Some((frac, reset)) = select_model(claude_models) {
             cloud_fallback_pools.push(super::config::QuotaPool {
                 label: "Claude".to_string(),
                 remaining_fraction: frac,
@@ -1237,7 +1277,63 @@ mod tests {
         let pools_depleted = parse_summary_pools(&response_depleted, "summary");
 
         assert_eq!(pools_depleted.len(), 1);
-        assert_eq!(pools_depleted[0].remaining_fraction, 0.0);
-        assert_eq!(pools_depleted[0].reset_time, Some("2026-07-28T19:00:51Z".to_string()));
+        assert_eq!(pools_depleted[0].remaining_fraction, 1.0);
+        assert_eq!(pools_depleted[0].reset_time, Some("2026-07-24T04:30:04Z".to_string()));
+    }
+
+    #[test]
+    fn test_connect_rpc_wrapped_parsing() {
+        let json_connect_rpc = r#"{
+            "response": {
+                "groups": [
+                    {
+                        "displayName": "Gemini Models",
+                        "buckets": [
+                            {
+                                "bucketId": "gemini-weekly",
+                                "window": "weekly",
+                                "remainingFraction": 0.26,
+                                "resetTime": "2026-07-28T19:00:51Z"
+                            },
+                            {
+                                "bucketId": "gemini-5h",
+                                "window": "5h",
+                                "remainingFraction": 0.90,
+                                "resetTime": "2026-07-25T05:04:02Z"
+                            }
+                        ]
+                    },
+                    {
+                        "displayName": "Claude and GPT models",
+                        "buckets": [
+                            {
+                                "bucketId": "3p-weekly",
+                                "window": "weekly",
+                                "remainingFraction": 0.21,
+                                "resetTime": "2026-07-28T09:19:45Z"
+                            },
+                            {
+                                "bucketId": "3p-5h",
+                                "window": "5h",
+                                "remainingFraction": 0.86,
+                                "resetTime": "2026-07-25T04:37:34Z"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }"#;
+
+        let response: RetrieveUserQuotaSummaryResponse = serde_json::from_str(json_connect_rpc).unwrap();
+        let pools = parse_summary_pools(&response, "summary");
+
+        assert_eq!(pools.len(), 2);
+        assert_eq!(pools[0].label, "Gemini");
+        assert_eq!(pools[0].remaining_fraction, 0.90);
+        assert_eq!(pools[0].reset_time, Some("2026-07-25T05:04:02Z".to_string()));
+
+        assert_eq!(pools[1].label, "Claude");
+        assert_eq!(pools[1].remaining_fraction, 0.86);
+        assert_eq!(pools[1].reset_time, Some("2026-07-25T04:37:34Z".to_string()));
     }
 }

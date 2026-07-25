@@ -279,7 +279,7 @@
       <h2 class="section-title">Quota Pools</h2>
 
       <div class="pools-list">
-        {#if s.isLoading}
+        {#if s.isLoading || s.isRefreshing}
           <SkeletonRow />
           <SkeletonRow short />
         {:else}

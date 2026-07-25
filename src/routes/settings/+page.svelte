@@ -28,7 +28,7 @@
 
   onMount(async () => {
     const ua = navigator.userAgent.toLowerCase();
-    isMobilePlatform = ua.includes("android") || ua.includes("iphone") || ua.includes("ipad") || ua.includes("mobile") || (window.innerWidth <= 600 && window.innerHeight > window.innerWidth);
+    isMobilePlatform = ua.includes("android") || ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod") || (ua.includes("mobile") && !ua.includes("windows"));
 
     try {
       const loaded = await invoke<Config>("get_config");
