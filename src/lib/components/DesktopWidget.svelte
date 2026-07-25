@@ -127,7 +127,7 @@
             </p>
 
             <button class="btn-setup" onclick={() => s.showTokenInput = !s.showTokenInput}>
-              {s.showTokenInput ? 'Close Setup' : '⚙️ Setup Refresh Token'}
+              {s.showTokenInput ? 'Close Setup' : 'Setup Refresh Token'}
             </button>
 
             {#if s.showTokenInput}
@@ -151,7 +151,7 @@
 
   <div class="row-bottom">
     <span class="meta" id="quota-source">
-      {s.isOffline && s.pools.length === 0 ? 'Offline' : s.source === 'local' ? 'Local 🟢' : s.accountEmail ? `Cloud ☁️ • ${formatEmail(s.accountEmail, s.maskAccountEmail)}` : 'Cloud ☁️'}
+      {s.isOffline && s.pools.length === 0 ? 'Offline' : s.source === 'local' ? 'Local' : s.accountEmail ? `Cloud • ${formatEmail(s.accountEmail, s.maskAccountEmail)}` : 'Cloud'}
     </span>
     <span class="meta" id="quota-time-ago">{s.timeAgo}</span>
   </div>
