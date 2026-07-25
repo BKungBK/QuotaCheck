@@ -106,7 +106,7 @@
   </div>
 
   <div class="pools-container" id="quota-pools-list">
-    {#if s.isLoading}
+    {#if s.isLoading || s.isRefreshing}
       <SkeletonRow variant="desktop" />
       <SkeletonRow variant="desktop" short />
     {:else}
@@ -236,6 +236,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    padding-bottom: 4px;
   }
 
   .label {
@@ -253,7 +254,7 @@
   .live-badge {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     font-size: 0.5625rem;
     font-weight: 500;
     letter-spacing: 0.04em;
@@ -297,7 +298,7 @@
     align-items: center;
     justify-content: center;
     flex-grow: 1;
-    padding: 10px 0;
+    padding: 8px 0;
   }
 
   .offline-box {
@@ -310,7 +311,7 @@
     padding: 12px;
     background: oklch(18% 0 0);
     border: 1px solid oklch(26% 0 0);
-    border-radius: 8px;
+    border-radius: 6px;
     pointer-events: auto;
   }
 
@@ -330,14 +331,19 @@
   }
 
   .btn-setup {
-    padding: 6px 10px;
-    background: oklch(26% 0 0);
-    border: 1px solid oklch(34% 0 0);
+    padding: 5px 10px;
+    background: oklch(24% 0 0);
+    border: 1px solid oklch(32% 0 0);
     color: var(--color-ink-high);
     font-size: 0.6875rem;
     font-weight: 600;
     border-radius: 4px;
     cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease;
+  }
+  .btn-setup:hover {
+    background: oklch(28% 0 0);
+    border-color: oklch(38% 0 0);
   }
 
   .token-form {
@@ -353,34 +359,47 @@
     border-radius: 4px;
     border: 1px solid oklch(30% 0 0);
     background: oklch(12% 0 0);
-    color: #fff;
+    color: var(--color-ink-high);
     font-size: 0.6875rem;
+    outline: none;
+    transition: border-color 150ms ease;
+  }
+  .token-form input:focus {
+    border-color: oklch(48% 0 0);
   }
 
   .btn-save {
     padding: 6px;
-    background: oklch(48% 0.16 230);
-    color: #fff;
-    border: none;
+    background: oklch(36% 0 0);
+    color: var(--color-ink-high);
+    border: 1px solid oklch(44% 0 0);
     border-radius: 4px;
     font-size: 0.6875rem;
     font-weight: 600;
     cursor: pointer;
+    transition: background 150ms ease;
+  }
+  .btn-save:hover {
+    background: oklch(42% 0 0);
   }
 
   .save-status {
     font-size: 0.625rem;
-    color: oklch(75% 0.15 140);
+    color: oklch(75% 0 0);
   }
 
   .row-bottom {
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    padding-top: 4px;
+    border-top: 1px solid var(--color-separator);
   }
   .meta {
     font-size: 0.5625rem;
     font-weight: 500;
     letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
     color: var(--color-ink-dim);
   }
 </style>

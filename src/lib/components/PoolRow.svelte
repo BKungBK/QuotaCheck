@@ -34,11 +34,11 @@
 </div>
 
 <style>
-  /* ── Desktop Flat Row (Exact Commit 0b425f2) ── */
+  /* ── Desktop Flat Row (Impeccable Layout) ── */
   .pool-row.pool-row--desktop {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     padding: 6px 0;
     background: transparent;
     border: none;
@@ -47,17 +47,22 @@
   }
   :global(.pools-container > div + div .pool-row.pool-row--desktop) {
     border-top: 1px solid var(--color-separator);
+    padding-top: 6px;
+    margin-top: 3px;
   }
+
   .pool-row--desktop .pool-meta {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    line-height: 1.2;
   }
   .pool-row--desktop .pool-label {
     font-size: 0.75rem;
     font-weight: 500;
+    letter-spacing: -0.01em;
     color: var(--color-ink-high);
-    line-height: 1;
+    line-height: 1.2;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -66,20 +71,21 @@
   .pool-row--desktop .pool-percent {
     font-size: 0.75rem;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
     color: var(--color-ink-high);
-    line-height: 1;
+    line-height: 1.2;
     flex-shrink: 0;
   }
   .pool-row--desktop .bar-track {
     width: 100%;
     height: 5px;
     background: var(--color-bar-track);
-    border-radius: 4px;
+    border-radius: 3px;
     overflow: hidden;
   }
   .pool-row--desktop .bar-fill {
     height: 100%;
-    border-radius: 4px;
+    border-radius: 3px;
     will-change: width;
     transition: width 400ms ease, background 600ms ease;
   }
@@ -90,8 +96,11 @@
   }
   .pool-row--desktop .sub-meta {
     font-size: 0.5625rem;
+    font-weight: 400;
     color: var(--color-ink-muted);
     letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
   }
 
   /* ── Mobile Card View ── */

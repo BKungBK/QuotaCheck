@@ -16,11 +16,11 @@
 </div>
 
 <style>
-  /* ── Desktop Skeleton Flat Row (Exact Commit 0b425f2) ── */
+  /* ── Desktop Skeleton Flat Row (Impeccable Layout) ── */
   .pool-row.pool-row--desktop {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     padding: 6px 0;
     background: transparent;
     border: none;
@@ -29,12 +29,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    line-height: 1.2;
   }
   .pool-row--desktop .bar-track {
     width: 100%;
     height: 5px;
     background: var(--color-bar-track);
-    border-radius: 4px;
+    border-radius: 3px;
     overflow: hidden;
   }
   .pool-row--desktop .sub-row {
