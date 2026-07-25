@@ -16,7 +16,8 @@ import java.util.Locale
 import java.util.TimeZone
 
 object WidgetColors {
-    val ACCENT = Color.parseColor("#38BDF8")
+    val ACCENT = Color.parseColor("#A1A1AA")
+    val INK_HIGH = Color.parseColor("#F4F4F5")
     val DOT_LIVE = Color.parseColor("#22C55E")
     val DOT_STALE = Color.parseColor("#EAB308")
     val DOT_OFFLINE = Color.parseColor("#71717A")
@@ -44,8 +45,15 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                 val sdfInput = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
                 sdfInput.timeZone = TimeZone.getTimeZone("UTC")
                 val date = sdfInput.parse(resetIsoStr) ?: return ""
-                val sdfOutput = SimpleDateFormat("HH:mm", Locale.getDefault())
-                "Reset " + sdfOutput.format(date)
+                val diffMs = date.time - System.currentTimeMillis()
+                if (diffMs > 0) {
+                    val hours = TimeUnit.MILLISECONDS.toHours(diffMs)
+                    val mins = TimeUnit.MILLISECONDS.toMinutes(diffMs) % 60
+                    if (hours > 0) "reset ${hours}h ${mins}m" else "reset ${mins}m"
+                } else {
+                    val sdfOutput = SimpleDateFormat("HH:mm", Locale.getDefault())
+                    "reset " + sdfOutput.format(date)
+                }
             } catch (_: Exception) {
                 ""
             }
@@ -85,6 +93,7 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                     val lastUpdated = cacheObj.optString("last_updated", "--:--")
                     val isOffline = cacheObj.optBoolean("is_offline", false)
                     val source = cacheObj.optString("source", "cloud")
+                    val accountEmail = cacheObj.optString("account_email", "")
 
                     // Status Dot & Text
                     if (isOffline) {
@@ -96,21 +105,25 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                         views.setImageViewResource(R.id.widget_status_dot, R.drawable.dot_live)
                         views.setTextViewText(R.id.widget_status_text, "LIVE")
                         views.setTextColor(R.id.widget_status_text, WidgetColors.DOT_LIVE)
-                        val srcLabel = if (source == "local") "Local 🟢" else "Cloud ☁️"
+                        val srcLabel = when {
+                            accountEmail.isNotEmpty() -> "Cloud • ${maskEmail(accountEmail)}"
+                            source == "local" -> "Local"
+                            else -> "Cloud ☁️"
+                        }
                         views.setTextViewText(R.id.widget_source_text, srcLabel)
                     }
 
                     views.setTextViewText(R.id.widget_time_ago_text, "Synced $lastUpdated")
 
                     if (pools != null && pools.length() > 0) {
-                        // Slot 1
+                        // Slot 1 (Gemini)
                         val p1 = pools.optJSONObject(0)
                         if (p1 != null) {
                             val label = p1.optString("label", "Gemini")
                             val rem = p1.optDouble("remaining_fraction", 1.0)
                             val resetStr = p1.optString("reset_time", "")
                             val pct = (rem * 100).toInt().coerceIn(0, 100)
-                            val textColor = if (pct <= 20) WidgetColors.LOW_REMAINING else WidgetColors.ACCENT
+                            val textColor = if (pct <= 20) WidgetColors.LOW_REMAINING else WidgetColors.INK_HIGH
 
                             views.setTextViewText(R.id.pool1_label, label)
                             views.setTextViewText(R.id.pool1_percent, "$pct%")
@@ -120,7 +133,7 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                             views.setViewVisibility(R.id.pool1_container, View.VISIBLE)
                         }
 
-                        // Slot 2
+                        // Slot 2 (Claude)
                         if (pools.length() > 1) {
                             val p2 = pools.optJSONObject(1)
                             if (p2 != null) {
@@ -128,7 +141,7 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                                 val rem = p2.optDouble("remaining_fraction", 1.0)
                                 val resetStr = p2.optString("reset_time", "")
                                 val pct = (rem * 100).toInt().coerceIn(0, 100)
-                                val textColor = if (pct <= 20) WidgetColors.LOW_REMAINING else WidgetColors.ACCENT
+                                val textColor = if (pct <= 20) WidgetColors.LOW_REMAINING else WidgetColors.INK_HIGH
 
                                 views.setTextViewText(R.id.pool2_label, label)
                                 views.setTextViewText(R.id.pool2_percent, "$pct%")
@@ -145,6 +158,14 @@ class QuotaWidgetProvider : AppWidgetProvider() {
             }
 
             return views
+        }
+
+        private fun maskEmail(email: String): String {
+            val parts = email.split("@")
+            if (parts.size != 2) return email
+            val user = parts[0]
+            val maskedUser = if (user.length > 2) user.take(2) + "***" else user
+            return "$maskedUser@${parts[1]}"
         }
     }
 

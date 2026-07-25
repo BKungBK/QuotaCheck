@@ -69,6 +69,12 @@ object QuotaNotificationManager {
         }
     }
 
+    fun sendTestNotification(context: Context) {
+        val title = "⚡ Test Notification - QuotaCheck"
+        val content = "ระบบแจ้งเตือนเตือนโควต้าพร้อมทำงานแล้ว! (Quota Alerts Active)"
+        sendNotification(context, title, content)
+    }
+
     private fun sendNotification(context: Context, title: String, content: String) {
         createNotificationChannel(context)
 

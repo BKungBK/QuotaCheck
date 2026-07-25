@@ -92,6 +92,20 @@
       console.error("Failed to open notification settings", e);
     }
   }
+
+  let notifTestStatusMsg = $state("");
+
+  async function handleTriggerTestNotification() {
+    try {
+      await invoke("plugin:quota|triggerTestNotification");
+      notifTestStatusMsg = "Test Notification Sent!";
+      setTimeout(() => { notifTestStatusMsg = ""; }, 3000);
+    } catch (e) {
+      console.error("Failed to trigger test notification", e);
+      notifTestStatusMsg = "Failed to send notification (Check permissions)";
+      setTimeout(() => { notifTestStatusMsg = ""; }, 3000);
+    }
+  }
 </script>
 
 {#if isMobilePlatform}
@@ -132,11 +146,19 @@
         <h3>🔔 App Notifications</h3>
       </div>
       <p class="card-desc">
-        Manage background alert permissions and status notifications in system settings.
+        Manage background alert permissions and test if the push notification system is working.
       </p>
-      <button type="button" class="btn-primary" onclick={handleOpenNotificationSettings}>
-        Open Notification Settings
-      </button>
+      <div class="btn-group-row">
+        <button type="button" class="btn-primary" onclick={handleTriggerTestNotification}>
+          ⚡ Test Notification
+        </button>
+        <button type="button" class="btn-secondary" onclick={handleOpenNotificationSettings}>
+          Notification Settings
+        </button>
+      </div>
+      {#if notifTestStatusMsg}
+        <span class="status-msg green">{notifTestStatusMsg}</span>
+      {/if}
     </div>
 
     <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
@@ -344,6 +366,18 @@
   .token-input-group {
     display: flex;
     gap: 8px;
+  }
+
+  .btn-group-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn-secondary {
+    background: var(--color-surface-variant);
+    color: var(--color-ink-high);
+    border: 1px solid var(--color-border);
   }
 
   .token-input-group input {

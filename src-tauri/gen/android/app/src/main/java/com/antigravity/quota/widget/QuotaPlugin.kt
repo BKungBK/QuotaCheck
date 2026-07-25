@@ -142,4 +142,12 @@ class QuotaPlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("success", true)
         invoke.resolve(ret)
     }
+
+    @Command
+    fun triggerTestNotification(invoke: Invoke) {
+        QuotaNotificationManager.sendTestNotification(activity.applicationContext)
+        val ret = JSObject()
+        ret.put("success", true)
+        invoke.resolve(ret)
+    }
 }

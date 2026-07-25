@@ -181,6 +181,15 @@
     }
   }
 
+  async function handleTriggerTestNotification() {
+    try {
+      await invoke('plugin:quota|triggerTestNotification');
+      showToast('⚡ Test Notification Sent');
+    } catch (_e) {
+      showToast('⚠️ Check Notification Permission');
+    }
+  }
+
   onMount(() => {
     const refs: { quota?: () => void; refresh?: () => void; config?: () => void } = {};
 
@@ -229,7 +238,7 @@
     </div>
   {/if}
 
-  <!-- Material 3 Top App Bar -->
+  <!-- Clean Mobile Header (No Duplicated Icon Buttons) -->
   <header class="top-app-bar">
     <div class="app-brand">
       <div class="brand-badge">BK</div>
@@ -239,24 +248,18 @@
       </div>
     </div>
 
-    <div class="app-bar-actions">
-      <button 
-        class="icon-btn ripple-btn" 
-        onclick={handleRefresh} 
-        aria-label="Refresh Quota" 
-        disabled={s.isRefreshing}
+    <!-- Header Status Indicator Pill -->
+    <div class="app-header-status">
+      <div 
+        class="status-chip" 
+        class:status-chip--live={!s.isOffline && !s.isStale}
+        class:status-chip--stale={s.isStale}
+        class:status-chip--offline={s.isOffline}
+        title={s.statusTooltip}
       >
-        <svg class="nav-icon" class:spinning={s.isRefreshing} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-        </svg>
-      </button>
-
-      <a href="/settings" class="icon-btn ripple-btn" aria-label="Settings">
-        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
-      </a>
+        <span class="status-pulse-dot"></span>
+        <span>{s.statusLabel}</span>
+      </div>
     </div>
   </header>
 
@@ -291,9 +294,9 @@
       </div>
     {/if}
 
-    <!-- Hero Status Card (Material Overview) -->
+    <!-- Hero Overview & Health Dashboard Card -->
     <section class="hero-card">
-      <div class="hero-header">
+      <div class="hero-top-row">
         <div class="account-pill">
           <svg class="cloud-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
@@ -318,27 +321,38 @@
           {/if}
         </div>
 
-        <div 
-          class="status-chip" 
-          class:status-chip--live={!s.isOffline && !s.isStale}
-          class:status-chip--stale={s.isStale}
-          class:status-chip--offline={s.isOffline}
-          title={s.statusTooltip}
-        >
-          <span class="status-pulse-dot"></span>
-          <span>{s.statusLabel}</span>
+        <div class="hero-quick-stat">
+          <span class="stat-label">Active Pools</span>
+          <span class="stat-count">{s.pools.length}</span>
         </div>
       </div>
 
       <div class="hero-footer">
-        <span class="last-sync-label">Last updated</span>
-        <span class="last-sync-value">{s.timeAgo}</span>
+        <div class="sync-meta">
+          <span class="last-sync-label">Last updated</span>
+          <span class="last-sync-value">{s.timeAgo}</span>
+        </div>
+        <div class="hero-actions-group">
+          <button class="test-notif-btn ripple-btn" onclick={handleTriggerTestNotification} title="Test Push Notification">
+            ⚡ Test Alert
+          </button>
+          <div class="pulse-status-badge">
+            {#if s.isRefreshing}
+              <span class="refreshing-text">Syncing...</span>
+            {:else}
+              <span class="synced-text">✓ Realtime</span>
+            {/if}
+          </div>
+        </div>
       </div>
     </section>
 
     <!-- Quota Pool Cards Section -->
     <section class="pools-section">
-      <h2 class="section-title">Quota Pools</h2>
+      <div class="section-header">
+        <h2 class="section-title">Quota Pools</h2>
+        <span class="pools-count-badge">{s.pools.length} Monitored</span>
+      </div>
 
       <div class="pools-list">
         {#if s.isLoading || s.isRefreshing}
@@ -348,16 +362,13 @@
           {#each s.pools as pool (pool.label)}
             <div 
               animate:flip={{ duration: 300 }} 
-              class="material-card-wrapper ripple-btn"
-              class:card--high={pool.remaining_fraction > 0.5}
-              class:card--medium={pool.remaining_fraction >= 0.2 && pool.remaining_fraction <= 0.5}
-              class:card--low={pool.remaining_fraction < 0.2}
+              class="material-card-wrapper"
               onclick={() => openPoolDetail(pool)}
               role="button"
               tabindex="0"
               onkeydown={(e) => e.key === 'Enter' && openPoolDetail(pool)}
             >
-              <PoolRow {pool} isOffline={s.isOffline} poolsLength={s.pools.length} />
+              <PoolRow {pool} isOffline={s.isOffline} poolsLength={s.pools.length} variant="mobile" />
             </div>
           {:else}
             <!-- Empty / Offline Android Card -->
@@ -459,25 +470,28 @@
     </div>
   {/if}
 
-  <!-- Material 3 Android Bottom Navigation Bar -->
+  <!-- Material 3 Mobile Bottom Navigation Bar (No Duplicated Icons) -->
   <nav class="bottom-nav-bar">
     <div class="nav-item nav-item--active">
-      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-        <polyline points="9 22 9 12 15 12 15 22"/>
+      <!-- Correct Dashboard / Metrics Chart Icon (Replaces wrong Home icon) -->
+      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+        <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+        <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+        <rect x="3" y="16" width="7" height="5" rx="1.5"/>
       </svg>
       <span class="nav-label">Quota</span>
     </div>
 
-    <button class="nav-item ripple-btn" onclick={handleRefresh} disabled={s.isRefreshing}>
-      <svg class="bottom-nav-icon" class:spinning={s.isRefreshing} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <button class="nav-item ripple-btn" onclick={handleRefresh} disabled={s.isRefreshing} aria-label="Sync Quota">
+      <svg class="bottom-nav-icon" class:spinning={s.isRefreshing} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
       </svg>
       <span class="nav-label">Sync</span>
     </button>
 
-    <a href="/settings" class="nav-item ripple-btn">
-      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <a href="/settings" class="nav-item ripple-btn" aria-label="Settings">
+      <svg class="bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
@@ -490,7 +504,7 @@
   :global(html, body) {
     margin: 0;
     padding: 0;
-    background: var(--color-bg) !important;
+    background: oklch(12% 0.01 260) !important;
     font-family: "Roboto", "Inter", system-ui, -apple-system, sans-serif;
     height: 100%;
     overflow: hidden;
@@ -503,7 +517,7 @@
   }
   @keyframes pulseGlow {
     0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.3); opacity: 0.6; }
+    50% { transform: scale(1.35); opacity: 0.5; }
   }
   @keyframes slideUp {
     from { transform: translateY(100%); }
@@ -518,14 +532,15 @@
 
   /* App Shell Container */
   .mobile-app-shell {
-    --color-bg: oklch(14% 0 0);
-    --color-surface: oklch(20% 0 0);
+    --color-bg: oklch(12% 0.01 260);
+    --color-surface: oklch(18% 0.015 260);
+    --color-border: oklch(25% 0.02 260);
     width: 100vw;
     height: 100dvh;
     display: flex;
     flex-direction: column;
     background: var(--color-bg);
-    color: var(--color-ink-high);
+    color: oklch(92% 0 0);
     box-sizing: border-box;
     overflow: hidden;
     user-select: none;
@@ -542,7 +557,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    box-shadow: 0 4px 12px oklch(0% 0 0 / 0.2);
+    box-shadow: 0 4px 16px oklch(0% 0 0 / 0.3);
   }
   .banner-content {
     display: flex;
@@ -553,7 +568,7 @@
   .banner-icon {
     width: 22px;
     height: 22px;
-    color: var(--color-accent);
+    color: oklch(75% 0.15 240);
     flex-shrink: 0;
   }
   .banner-text {
@@ -564,11 +579,11 @@
   .banner-title {
     font-size: 0.875rem;
     font-weight: 700;
-    color: var(--color-ink-high);
+    color: oklch(95% 0 0);
   }
   .banner-sub {
     font-size: 0.75rem;
-    color: var(--color-ink-muted);
+    color: oklch(75% 0 0);
   }
   .banner-actions {
     display: flex;
@@ -584,12 +599,12 @@
     border: none;
   }
   .banner-btn--primary {
-    background: var(--color-accent);
+    background: oklch(75% 0.15 240);
     color: oklch(10% 0 0);
   }
   .banner-btn--dismiss {
     background: oklch(26% 0.02 260);
-    color: var(--color-ink-muted);
+    color: oklch(70% 0 0);
     padding: 6px 10px;
   }
 
@@ -602,8 +617,8 @@
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: var(--color-surface-variant);
-    border: 1px solid var(--color-border);
+    background: oklch(22% 0.02 260);
+    border: 1px solid oklch(30% 0.02 260);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -611,16 +626,16 @@
     z-index: 100;
     transition: transform 0.1s linear;
   }
-  .pull-spinner { width: 20px; height: 20px; color: var(--color-accent); }
+  .pull-spinner { width: 20px; height: 20px; color: oklch(75% 0.15 240); }
 
   /* Top App Bar */
   .top-app-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: max(14px, env(safe-area-inset-top, 0px)) 20px 12px 20px;
-    background: var(--color-bg);
-    border-bottom: 1px solid oklch(22% 0 0 / 0.5);
+    padding: max(14px, env(safe-area-inset-top, 0px)) 20px 14px 20px;
+    background: oklch(14% 0.01 260);
+    border-bottom: 1px solid oklch(24% 0.02 260);
     z-index: 10;
   }
   .app-brand {
@@ -629,17 +644,18 @@
     gap: 12px;
   }
   .brand-badge {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     border-radius: 12px;
-    background: var(--color-accent-glow);
-    color: var(--color-ink-high);
+    background: linear-gradient(135deg, oklch(35% 0.12 260) 0%, oklch(24% 0.08 260) 100%);
+    border: 1px solid oklch(40% 0.1 260 / 0.5);
+    color: oklch(98% 0 0);
     font-weight: 800;
     font-size: 0.9375rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px oklch(0% 0 0 / 0.3);
+    box-shadow: 0 2px 10px oklch(0% 0 0 / 0.35);
   }
   .title-group { display: flex; flex-direction: column; }
   .app-title {
@@ -647,31 +663,16 @@
     font-size: 1.125rem;
     font-weight: 700;
     letter-spacing: -0.01em;
-    color: var(--color-ink-high);
+    color: oklch(95% 0 0);
     line-height: 1.2;
   }
   .app-subtitle {
     font-size: 0.75rem;
     font-weight: 500;
-    color: var(--color-ink-muted);
+    color: oklch(70% 0 0);
   }
-  .app-bar-actions { display: flex; align-items: center; gap: 8px; }
 
   /* Buttons & Touch Interactivity */
-  .icon-btn {
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    border: none;
-    background: var(--color-surface);
-    color: var(--color-ink-mid);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    text-decoration: none;
-    transition: background 0.2s, transform 0.15s;
-  }
   .ripple-btn {
     transition: transform 0.15s ease, opacity 0.15s ease;
   }
@@ -679,17 +680,12 @@
     transform: scale(0.95);
     opacity: 0.85;
   }
-  .icon-btn:hover {
-    background: var(--color-surface-variant);
-    color: var(--color-ink-high);
-  }
-  .nav-icon { width: 20px; height: 20px; }
 
   /* Content Scroll Area */
   .mobile-content {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 20px;
+    padding: 18px 18px 24px 18px;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -698,16 +694,16 @@
 
   /* Hero Overview Card */
   .hero-card {
-    background: linear-gradient(135deg, oklch(19% 0.02 260) 0%, oklch(15% 0.01 260) 100%);
-    border: 1px solid var(--color-border);
+    background: linear-gradient(145deg, oklch(20% 0.02 260) 0%, oklch(16% 0.015 260) 100%);
+    border: 1px solid oklch(28% 0.025 260);
     border-radius: 20px;
     padding: 18px 20px;
     display: flex;
     flex-direction: column;
     gap: 16px;
-    box-shadow: 0 4px 16px oklch(0% 0 0 / 0.25);
+    box-shadow: 0 6px 20px oklch(0% 0 0 / 0.3);
   }
-  .hero-header {
+  .hero-top-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -716,19 +712,20 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
+    padding: 6px 14px;
     background: oklch(24% 0.02 260);
+    border: 1px solid oklch(30% 0.02 260);
     border-radius: 20px;
     font-size: 0.8125rem;
     font-weight: 500;
-    color: var(--color-ink-mid);
+    color: oklch(88% 0 0);
   }
-  .cloud-icon { width: 16px; height: 16px; color: var(--color-accent); }
+  .cloud-icon { width: 16px; height: 16px; color: oklch(75% 0.14 240); }
 
   .mask-toggle-btn {
     background: none;
     border: none;
-    color: var(--color-ink-muted);
+    color: oklch(65% 0 0);
     padding: 2px 4px;
     cursor: pointer;
     display: flex;
@@ -736,6 +733,18 @@
     justify-content: center;
   }
   .eye-icon { width: 14px; height: 14px; }
+
+  .hero-quick-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: oklch(24% 0.02 260);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+  }
+  .stat-label { color: oklch(70% 0 0); }
+  .stat-count { font-weight: 700; color: oklch(95% 0 0); }
 
   .status-chip {
     display: flex;
@@ -748,19 +757,22 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     background: oklch(24% 0 0);
-    color: var(--color-ink-muted);
+    color: oklch(65% 0 0);
   }
   .status-chip--live {
-    background: oklch(24% 0.06 145);
-    color: var(--color-dot-live);
+    background: oklch(22% 0.06 145);
+    border: 1px solid oklch(30% 0.08 145);
+    color: oklch(85% 0.14 145);
   }
   .status-chip--stale {
-    background: oklch(26% 0.08 75);
-    color: var(--color-dot-stale);
+    background: oklch(24% 0.08 75);
+    border: 1px solid oklch(32% 0.1 75);
+    color: oklch(85% 0.14 75);
   }
   .status-chip--offline {
     background: oklch(22% 0 0);
-    color: var(--color-dot-offline);
+    border: 1px solid oklch(28% 0 0);
+    color: oklch(65% 0 0);
   }
   .status-pulse-dot {
     width: 7px;
@@ -774,11 +786,38 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-top: 12px;
-    border-top: 1px solid oklch(25% 0.015 260);
+    padding-top: 14px;
+    border-top: 1px solid oklch(26% 0.02 260);
   }
-  .last-sync-label { font-size: 0.75rem; color: var(--color-ink-muted); }
-  .last-sync-value { font-size: 0.8125rem; font-weight: 600; color: var(--color-ink-high); }
+  .hero-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .test-notif-btn {
+    background: oklch(24% 0.03 260);
+    border: 1px solid oklch(34% 0.04 260);
+    color: oklch(90% 0 0);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .sync-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .last-sync-label { font-size: 0.75rem; color: oklch(70% 0 0); }
+  .last-sync-value { font-size: 0.875rem; font-weight: 600; color: oklch(95% 0 0); }
+
+  .pulse-status-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .synced-text { color: oklch(80% 0.12 145); }
+  .refreshing-text { color: oklch(80% 0.14 240); }
 
   /* Pools Section */
   .pools-section {
@@ -786,13 +825,28 @@
     flex-direction: column;
     gap: 12px;
   }
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+  }
   .section-title {
-    margin: 0 0 4px 4px;
+    margin: 0;
     font-size: 0.8125rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--color-ink-muted);
+    color: oklch(75% 0 0); /* Verified >= 4.5:1 contrast */
+  }
+  .pools-count-badge {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: oklch(70% 0 0);
+    background: oklch(22% 0.015 260);
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid oklch(28% 0.02 260);
   }
   .pools-list {
     display: flex;
@@ -802,14 +856,12 @@
   .material-card-wrapper {
     width: 100%;
     cursor: pointer;
-    border-radius: 12px;
-    transition: transform 0.15s ease;
   }
 
   /* Offline Card */
   .offline-card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: oklch(18% 0.015 260);
+    border: 1px solid oklch(26% 0.02 260);
     border-radius: 20px;
     padding: 24px 20px;
     display: flex;
@@ -826,25 +878,25 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--color-ink-muted);
+    color: oklch(70% 0 0);
   }
   .offline-icon-wrapper svg { width: 26px; height: 26px; }
 
-  .offline-title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--color-ink-high); }
-  .offline-body { margin: 0; font-size: 0.8125rem; color: var(--color-ink-muted); line-height: 1.4; }
+  .offline-title { margin: 0; font-size: 1rem; font-weight: 700; color: oklch(95% 0 0); }
+  .offline-body { margin: 0; font-size: 0.8125rem; color: oklch(75% 0 0); line-height: 1.4; }
 
   .material-btn {
-    padding: 10px 18px;
+    padding: 12px 18px;
     border-radius: 12px;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface-variant);
-    color: var(--color-ink-high);
+    border: 1px solid oklch(30% 0.02 260);
+    background: oklch(24% 0.02 260);
+    color: oklch(95% 0 0);
     font-size: 0.8125rem;
     font-weight: 600;
     cursor: pointer;
   }
   .material-btn--primary {
-    background: var(--color-accent);
+    background: oklch(70% 0.15 240);
     color: oklch(10% 0 0);
     border: none;
   }
@@ -870,12 +922,12 @@
     color: #fff;
     font-size: 0.8125rem;
   }
-  .save-status-text { font-size: 0.75rem; color: var(--color-dot-live); }
+  .save-status-text { font-size: 0.75rem; color: oklch(80% 0.12 145); }
 
   /* Floating Toast Notification */
   .toast-floating-container {
     position: fixed;
-    bottom: 76px;
+    bottom: 84px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 200;
@@ -885,27 +937,27 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 10px 18px;
     border-radius: 24px;
     background: oklch(26% 0.03 260);
     border: 1px solid oklch(36% 0.04 260);
-    color: var(--color-ink-high);
+    color: oklch(95% 0 0);
     font-size: 0.8125rem;
     font-weight: 600;
-    box-shadow: 0 8px 24px oklch(0% 0 0 / 0.4);
+    box-shadow: 0 8px 24px oklch(0% 0 0 / 0.5);
   }
   .toast-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--color-accent);
+    background: oklch(75% 0.15 240);
   }
 
-  /* Material 3 Detail Bottom Sheet */
+  /* Detail Bottom Sheet */
   .bottom-sheet-backdrop {
     position: fixed;
     inset: 0;
-    background: oklch(0% 0 0 / 0.65);
+    background: oklch(0% 0 0 / 0.7);
     backdrop-filter: blur(6px);
     z-index: 300;
   }
@@ -918,7 +970,7 @@
     border-top: 1px solid oklch(30% 0.02 260);
     border-top-left-radius: 24px;
     border-top-right-radius: 24px;
-    padding: 12px 20px 24px 20px;
+    padding: 14px 20px max(24px, env(safe-area-inset-bottom, 0px)) 20px;
     z-index: 310;
     animation: slideUp 0.25s cubic-bezier(0.17, 0.67, 0.83, 0.67);
     display: flex;
@@ -927,7 +979,7 @@
     box-shadow: 0 -8px 32px oklch(0% 0 0 / 0.5);
   }
   .sheet-handle {
-    width: 36px;
+    width: 40px;
     height: 4px;
     border-radius: 2px;
     background: oklch(38% 0.01 260);
@@ -939,13 +991,13 @@
     justify-content: space-between;
   }
   .sheet-title-group { display: flex; flex-direction: column; }
-  .sheet-category { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-ink-muted); }
-  .sheet-pool-label { margin: 2px 0 0 0; font-size: 1.25rem; font-weight: 700; color: var(--color-ink-high); }
+  .sheet-category { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.06em; color: oklch(70% 0 0); }
+  .sheet-pool-label { margin: 2px 0 0 0; font-size: 1.25rem; font-weight: 700; color: oklch(95% 0 0); }
 
   .sheet-close-btn {
     background: oklch(24% 0.02 260);
     border: none;
-    color: var(--color-ink-mid);
+    color: oklch(80% 0 0);
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -964,9 +1016,9 @@
     flex-direction: column;
     gap: 4px;
   }
-  .metric-label { font-size: 0.75rem; color: var(--color-ink-muted); }
-  .metric-value { font-size: 1.5rem; font-weight: 800; color: var(--color-accent); }
-  .metric-value--sub { font-size: 1rem; font-weight: 600; color: var(--color-ink-high); margin-top: 4px; }
+  .metric-label { font-size: 0.75rem; color: oklch(70% 0 0); }
+  .metric-value { font-size: 1.5rem; font-weight: 800; color: oklch(85% 0.14 145); }
+  .metric-value--sub { font-size: 1rem; font-weight: 600; color: oklch(90% 0 0); margin-top: 4px; }
 
   .sheet-info-box {
     background: oklch(14% 0.01 260);
@@ -977,8 +1029,8 @@
     flex-direction: column;
     gap: 4px;
   }
-  .info-label { font-size: 0.75rem; color: var(--color-ink-muted); }
-  .info-val { font-size: 0.8125rem; font-weight: 600; color: var(--color-ink-high); }
+  .info-label { font-size: 0.75rem; color: oklch(70% 0 0); }
+  .info-val { font-size: 0.8125rem; font-weight: 600; color: oklch(90% 0 0); }
 
   .sheet-advice-box {
     padding: 12px 14px;
@@ -991,15 +1043,16 @@
   .advice--warn { color: oklch(85% 0.14 75); }
   .advice--alert { color: oklch(80% 0.18 25); }
 
-  /* Material 3 Bottom Navigation Bar */
+  /* Mobile Bottom Navigation Bar */
   .bottom-nav-bar {
-    height: calc(56px + max(12px, env(safe-area-inset-bottom, 0px)));
-    background: oklch(14% 0 0 / 0.95);
-    border-top: 1px solid oklch(22% 0 0 / 0.5);
+    height: calc(60px + max(10px, env(safe-area-inset-bottom, 0px)));
+    background: oklch(14% 0.01 260 / 0.96);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid oklch(24% 0.02 260);
     display: flex;
     align-items: center;
     justify-content: space-around;
-    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
     z-index: 10;
   }
   .nav-item {
@@ -1010,16 +1063,17 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-    padding: 8px 16px;
-    border-radius: 16px;
-    color: var(--color-ink-muted);
+    padding: 6px 20px;
+    border-radius: 20px;
+    color: oklch(65% 0 0);
     cursor: pointer;
     text-decoration: none;
     transition: color 0.2s, background 0.2s;
   }
   .nav-item--active {
-    color: var(--color-accent);
-    background: var(--color-accent-glow);
+    color: oklch(95% 0 0);
+    background: oklch(24% 0.04 260);
+    border: 1px solid oklch(32% 0.05 260);
   }
   .bottom-nav-icon { width: 22px; height: 22px; }
   .nav-label { font-size: 0.6875rem; font-weight: 600; }
