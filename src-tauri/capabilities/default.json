@@ -6,6 +6,6 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "quota:default"
+    "default"
   ]
 }

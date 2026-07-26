@@ -25,14 +25,17 @@
 
   async function handleRequestNotificationPermission() {
     try {
-      await invoke('plugin:quota|requestNotificationPermission');
-      const res = await invoke<{ granted: boolean }>('plugin:quota|checkNotificationPermission');
+      const res = await invoke<{ granted: boolean }>('plugin:quota|requestNotificationPermission');
       if (res && res.granted) {
         showNotificationBanner = false;
         showToast('Notifications enabled');
+      } else {
+        showNotificationBanner = true;
+        showToast('Notifications still disabled');
       }
-    } catch (_e) {
-      // Fallback
+    } catch (e) {
+      console.error('Notification permission request failed', e);
+      showToast('Notification permission unavailable');
     }
   }
 
@@ -120,12 +123,11 @@
     s.isRefreshing = true;
     try {
       await invoke('plugin:quota|triggerManualSync');
-    } catch (_e) {
-      try {
-        await invoke('manual_refresh_trigger');
-      } catch (err) {
-        console.error('Refresh failed', err);
-      }
+    } catch (err) {
+      console.error('Android quota sync failed', err);
+      s.isRefreshing = false;
+      showToast('Android sync unavailable');
+      return;
     }
     setTimeout(async () => {
       await loadQuotaData();
@@ -147,7 +149,7 @@
     }
   }
 
-  // ── Mobile-only: save token via Kotlin plugin, fallback to Config ─────────
+  // ── Mobile-only: save token via Kotlin plugin ─────────────────────────────
   async function handleSaveToken() {
     const token = s.tokenInput.trim();
     if (!token) return;
@@ -161,23 +163,10 @@
         s.showTokenInput = false;
         s.tokenSaveStatus = '';
       }, 1000);
-    } catch (_pluginErr) {
-      try {
-        const cfg = await invoke<Config>('get_config');
-        cfg.refresh_token_override = token;
-        await invoke('save_config', { newConfig: cfg });
-        s.tokenSaveStatus = 'Token saved to config!';
-        showToast('Token Saved to Config');
-        setTimeout(async () => {
-          await handleRefresh();
-          s.showTokenInput = false;
-          s.tokenSaveStatus = '';
-        }, 1000);
-      } catch (cfgErr) {
-        console.error('Failed to save token to config fallback:', cfgErr);
-        s.tokenSaveStatus = 'Failed to save token';
-        showToast('Failed to Save Token');
-      }
+    } catch (pluginErr) {
+      console.error('Android token save failed:', pluginErr);
+      s.tokenSaveStatus = 'Android plugin unavailable';
+      showToast('Failed to Save Token');
     }
   }
 

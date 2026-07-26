@@ -54,10 +54,15 @@
     try {
       await invoke("plugin:quota|saveRefreshToken", { token: refreshTokenInput.trim() });
       tokenStatusMsg = "Token saved to Android Secure Storage!";
-    } catch (_e) {
-      config.refresh_token_override = refreshTokenInput.trim();
-      await invoke("save_config", { newConfig: config });
-      tokenStatusMsg = "Token saved to Config!";
+    } catch (e) {
+      if (isMobilePlatform) {
+        console.error("Android token save failed", e);
+        tokenStatusMsg = "Failed to save token: Android plugin unavailable.";
+      } else {
+        config.refresh_token_override = refreshTokenInput.trim();
+        await invoke("save_config", { newConfig: config });
+        tokenStatusMsg = "Token saved to Config!";
+      }
     } finally {
       isSavingToken = false;
       setTimeout(() => { tokenStatusMsg = ""; }, 3000);

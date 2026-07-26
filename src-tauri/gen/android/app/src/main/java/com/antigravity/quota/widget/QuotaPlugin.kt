@@ -1,5 +1,6 @@
 package com.antigravity.quota.widget
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -8,13 +9,14 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
+import app.tauri.annotation.Permission
+import app.tauri.annotation.PermissionCallback
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
@@ -30,7 +32,14 @@ class SaveConfigArgs {
     var configJson: String = ""
 }
 
-@TauriPlugin
+@TauriPlugin(
+    permissions = [
+        Permission(
+            strings = [Manifest.permission.POST_NOTIFICATIONS],
+            alias = "notifications"
+        )
+    ]
+)
 class QuotaPlugin(private val activity: Activity) : Plugin(activity) {
 
     companion object {
@@ -102,30 +111,32 @@ class QuotaPlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun checkNotificationPermission(invoke: Invoke) {
-        val hasPostNotif = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(activity, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        val granted = NotificationManagerCompat.from(activity).areNotificationsEnabled() && hasPostNotif
-        val ret = JSObject()
-        ret.put("granted", granted)
-        invoke.resolve(ret)
+        resolveNotificationPermission(invoke)
     }
 
     @Command
     fun requestNotificationPermission(invoke: Invoke) {
-        activity.runOnUiThread {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                if (ContextCompat.checkSelfPermission(activity, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(
-                        activity,
-                        arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                        1001
-                    )
-                }
-            }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || isNotificationPermissionGranted()) {
+            resolveNotificationPermission(invoke)
+            return
         }
+
+        requestPermissionForAlias("notifications", invoke, "notificationPermissionCallback")
+    }
+
+    @PermissionCallback
+    fun notificationPermissionCallback(invoke: Invoke) {
+        resolveNotificationPermission(invoke)
+    }
+
+    private fun isNotificationPermissionGranted(): Boolean {
         val hasPostNotif = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(activity, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        val granted = NotificationManagerCompat.from(activity).areNotificationsEnabled() && hasPostNotif
+                ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        return NotificationManagerCompat.from(activity).areNotificationsEnabled() && hasPostNotif
+    }
+
+    private fun resolveNotificationPermission(invoke: Invoke) {
+        val granted = isNotificationPermissionGranted()
         val ret = JSObject()
         ret.put("granted", granted)
         invoke.resolve(ret)
