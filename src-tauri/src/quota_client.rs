@@ -188,6 +188,8 @@ struct BackendQuotaBucket {
     remaining_fraction: Option<f64>,
     #[serde(default, rename = "resetTime")]
     reset_time: Option<String>,
+    #[serde(default)]
+    disabled: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -475,6 +477,10 @@ fn parse_summary_pools(parsed: &RetrieveUserQuotaSummaryResponse, display_mode: 
                 let is_g_5h = g_name.contains("5h") || g_name.contains("5-hour") || g_name.contains("5 hour");
 
                 for b in &g.buckets {
+                    if b.disabled.unwrap_or(false) {
+                        continue;
+                    }
+
                     let id_lower = b.bucket_id.as_deref().unwrap_or("").to_lowercase();
                     let name_lower = b.display_name.as_deref().unwrap_or("").to_lowercase();
                     let win_lower = b.window.as_deref().unwrap_or("").to_lowercase();
