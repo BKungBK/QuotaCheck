@@ -102,7 +102,9 @@ class QuotaPlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun checkNotificationPermission(invoke: Invoke) {
-        val granted = NotificationManagerCompat.from(activity).areNotificationsEnabled()
+        val hasPostNotif = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(activity, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        val granted = NotificationManagerCompat.from(activity).areNotificationsEnabled() && hasPostNotif
         val ret = JSObject()
         ret.put("granted", granted)
         invoke.resolve(ret)
@@ -110,16 +112,20 @@ class QuotaPlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun requestNotificationPermission(invoke: Invoke) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(activity, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(
-                    activity,
-                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                    1001
-                )
+        activity.runOnUiThread {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(activity, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(
+                        activity,
+                        arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                        1001
+                    )
+                }
             }
         }
-        val granted = NotificationManagerCompat.from(activity).areNotificationsEnabled()
+        val hasPostNotif = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(activity, android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        val granted = NotificationManagerCompat.from(activity).areNotificationsEnabled() && hasPostNotif
         val ret = JSObject()
         ret.put("granted", granted)
         invoke.resolve(ret)

@@ -183,9 +183,12 @@
 
   async function handleTriggerTestNotification() {
     try {
-      await invoke('plugin:quota|requestNotificationPermission');
       await invoke('plugin:quota|triggerTestNotification');
       showToast('⚡ Test Notification Sent');
+      try {
+        const res = await invoke<{ granted: boolean }>('plugin:quota|checkNotificationPermission');
+        if (res) showNotificationBanner = !res.granted;
+      } catch (_e) {}
     } catch (_e) {
       showToast('⚠️ Check Notification Permission');
     }
@@ -209,9 +212,9 @@
       }
 
       try {
-        const res = await invoke<{ granted: boolean }>('plugin:quota|requestNotificationPermission');
-        if (res && res.granted === false) {
-          showNotificationBanner = true;
+        const res = await invoke<{ granted: boolean }>('plugin:quota|checkNotificationPermission');
+        if (res) {
+          showNotificationBanner = !res.granted;
         }
       } catch (_e) {
         // Plugin not ready or non-Android platform
