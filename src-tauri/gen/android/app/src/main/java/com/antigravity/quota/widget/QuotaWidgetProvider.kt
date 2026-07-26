@@ -17,12 +17,12 @@ import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 object WidgetColors {
-    val ACCENT = Color.parseColor("#A1A1AA")
-    val INK_HIGH = Color.parseColor("#F4F4F5")
-    val DOT_LIVE = Color.parseColor("#22C55E")
-    val DOT_STALE = Color.parseColor("#EAB308")
-    val DOT_OFFLINE = Color.parseColor("#71717A")
-    val LOW_REMAINING = Color.parseColor("#EF4444")
+    val ACCENT = Color.parseColor("#5D5D5D")
+    val INK_HIGH = Color.parseColor("#E6E6E6")
+    val DOT_LIVE = Color.parseColor("#AEAEAE")
+    val DOT_STALE = Color.parseColor("#BA8400")
+    val DOT_OFFLINE = Color.parseColor("#4D4D4D")
+    val LOW_REMAINING = Color.parseColor("#6B6B6B")
 }
 
 class QuotaWidgetProvider : AppWidgetProvider() {
