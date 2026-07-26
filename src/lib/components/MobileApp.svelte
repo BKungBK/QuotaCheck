@@ -183,6 +183,7 @@
 
   async function handleTriggerTestNotification() {
     try {
+      await invoke('plugin:quota|requestNotificationPermission');
       await invoke('plugin:quota|triggerTestNotification');
       showToast('⚡ Test Notification Sent');
     } catch (_e) {
@@ -199,13 +200,16 @@
         s.maskAccountEmail = cfg.mask_account_email ?? false;
         if (cfg.refresh_token_override) {
           s.tokenInput = cfg.refresh_token_override;
+          try {
+            await invoke('plugin:quota|saveRefreshToken', { token: cfg.refresh_token_override });
+          } catch (_e) { /* ignore if non-android */ }
         }
       } catch (e) {
         console.error('Failed to load config in page', e);
       }
 
       try {
-        const res = await invoke<{ granted: boolean }>('plugin:quota|checkNotificationPermission');
+        const res = await invoke<{ granted: boolean }>('plugin:quota|requestNotificationPermission');
         if (res && res.granted === false) {
           showNotificationBanner = true;
         }
