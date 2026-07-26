@@ -2,7 +2,6 @@ pub mod config;
 #[cfg(target_os = "windows")]
 pub mod windows_layer;
 pub mod quota_client;
-pub mod quota;
 
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, Emitter, State};
@@ -253,7 +252,6 @@ fn toggle_autostart(enable: bool) -> Result<(), String> {
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(desktop)]
     {
@@ -297,7 +295,6 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(quota::init())
         .manage(app_state)
         .setup(move |app| {
             if let Some(window) = app.get_webview_window("main") {

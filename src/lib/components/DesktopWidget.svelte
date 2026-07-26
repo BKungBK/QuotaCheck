@@ -107,12 +107,12 @@
 
   <div class="pools-container" id="quota-pools-list">
     {#if s.isLoading || s.isRefreshing}
-      <SkeletonRow variant="desktop" />
-      <SkeletonRow variant="desktop" short />
+      <SkeletonRow />
+      <SkeletonRow short />
     {:else}
       {#each s.pools as pool (pool.label)}
         <div animate:flip={{ duration: 300 }}>
-          <PoolRow {pool} isOffline={s.isOffline} poolsLength={s.pools.length} variant="desktop" />
+          <PoolRow {pool} isOffline={s.isOffline} poolsLength={s.pools.length} />
         </div>
       {:else}
         <div class="no-pools" id="no-pools-placeholder">

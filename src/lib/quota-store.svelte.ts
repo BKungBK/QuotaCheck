@@ -1,16 +1,12 @@
 // src/lib/quota-store.svelte.ts
-// Shared Svelte 5 runes reactive state — singleton module for quota data.
+// Svelte 5 runes reactive state for desktop quota data.
 // Uses a class-based store pattern so components can mutate state via method calls
 // and direct property assignment on the store object.
-//
-// Safe to use as a module-level singleton because DesktopWidget and MobileApp
-// are never mounted simultaneously (runtime UA switching in +page.svelte).
 
 import { listen } from '@tauri-apps/api/event';
 import type { Cache, Config, QuotaPool } from '$lib/types';
 
 class QuotaStore {
-  // ── Mutable state ─────────────────────────────────────────────────────────
   pools = $state<QuotaPool[]>([]);
   isOffline = $state(true);
   errorReason = $state<string | undefined>(undefined);
@@ -24,7 +20,6 @@ class QuotaStore {
   showTokenInput = $state(false);
   tokenSaveStatus = $state('');
 
-  // ── Now ticker ─────────────────────────────────────────────────────────────
   now = $state(Date.now());
 
   constructor() {
@@ -35,8 +30,6 @@ class QuotaStore {
       return () => clearInterval(interval);
     });
   }
-
-  // ── Derived values ──────────────────────────────────────────────────────────
 
   /** True when data has not been updated in more than 10 minutes */
   isStale = $derived.by(() => {
@@ -78,8 +71,6 @@ class QuotaStore {
     return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h`;
   });
 
-  // ── Methods ─────────────────────────────────────────────────────────────────
-
   /**
    * Apply a Cache payload to the store state.
    * Called from initial load and from the quota-update Tauri event.
@@ -117,10 +108,10 @@ class QuotaStore {
         this.isRefreshing = true;
       });
     } catch (_e) {
-      // Non-Tauri environment (e.g. browser dev preview) — silently ignore
+      // Non-Tauri environment (for example browser dev preview), silently ignore.
     }
   }
 }
 
-/** Singleton store instance shared across all components */
+/** Singleton store instance used by the desktop widget */
 export const quotaStore = new QuotaStore();

@@ -1,5 +1,5 @@
 // src/lib/quota-utils.ts
-// Pure utility functions shared between DesktopWidget and MobileApp
+// Pure utility functions used by the desktop quota widget
 
 /**
  * Format an email address with optional masking.

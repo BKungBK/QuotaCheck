@@ -1,5 +1,5 @@
 // src/lib/types.ts
-// Shared TypeScript interfaces used by DesktopWidget, MobileApp, and settings
+// TypeScript interfaces used by the desktop widget and settings
 
 export interface QuotaPool {
   label: string;
