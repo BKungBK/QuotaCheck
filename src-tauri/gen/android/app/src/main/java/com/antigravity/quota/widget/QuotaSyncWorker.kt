@@ -60,7 +60,9 @@ class QuotaSyncWorker(
         var isOffline = false
         var errorReason: String? = null
         var jsonPoolsArray = JSONArray()
-        var accountEmail: String? = null
+
+        val platformMetadata = "{\"ideType\":\"ANTIGRAVITY\",\"platform\":\"WINDOWS\",\"pluginType\":\"GEMINI\"}"
+        val userAgent = "antigravity/1.104.0 windows/amd64"
 
         if (refreshToken.isNotEmpty()) {
             val client = OkHttpClient.Builder()
@@ -90,15 +92,73 @@ class QuotaSyncWorker(
                     val accessToken = tokenJson.optString("access_token", "")
 
                     if (accessToken.isNotEmpty()) {
-                        // Step 2: Fetch retrieveUserQuotaSummary
+                        // Step 2: Discover project_id via loadCodeAssist
+                        var projectId: String? = null
+                        try {
+                            val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+                            val loadReqBody = JSONObject().apply {
+                                put("metadata", JSONObject().apply {
+                                    put("ideType", "ANTIGRAVITY"); put("platform", "WINDOWS"); put("pluginType", "GEMINI")
+                                })
+                            }.toString().toRequestBody(jsonMediaType)
+
+                            val loadResponse = client.newCall(
+                                Request.Builder()
+                                    .url("https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist")
+                                    .addHeader("Authorization", "Bearer $accessToken")
+                                    .addHeader("User-Agent", userAgent)
+                                    .addHeader("Client-Metadata", platformMetadata)
+                                    .post(loadReqBody)
+                                    .build()
+                            ).execute()
+                            if (loadResponse.isSuccessful) {
+                                val loadJson = JSONObject(loadResponse.body?.string() ?: "{}")
+                                projectId = loadJson.optString("cloudaicompanionProject", "").ifEmpty { null }
+                            }
+                        } catch (_: Exception) { /* fall through to step 3 */ }
+
+                        // Step 3: Fallback project discovery via ResourceManager
+                        if (projectId == null) {
+                            try {
+                                val rmResponse = client.newCall(
+                                    Request.Builder()
+                                        .url("https://cloudresourcemanager.googleapis.com/v1/projects")
+                                        .addHeader("Authorization", "Bearer $accessToken")
+                                        .get()
+                                        .build()
+                                ).execute()
+                                if (rmResponse.isSuccessful) {
+                                    val projects = JSONObject(rmResponse.body?.string() ?: "{}").optJSONArray("projects")
+                                    if (projects != null) {
+                                        for (i in 0 until projects.length()) {
+                                            val p = projects.optJSONObject(i) ?: continue
+                                            val pId = p.optString("projectId", "")
+                                            val labels = p.optJSONObject("labels")
+                                            if (pId.startsWith("gen-lang-client") ||
+                                                (labels != null && labels.has("generative-language"))) {
+                                                projectId = pId
+                                                break
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (_: Exception) { /* projectId stays null, body falls back to {} */ }
+                        }
+
+                        // Step 4: Fetch retrieveUserQuotaSummary WITH project param
                         val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-                        val quotaReqBody = "{}".toRequestBody(jsonMediaType)
+                        val reqBodyJson = if (projectId != null) {
+                            JSONObject().put("project", projectId)
+                        } else {
+                            JSONObject()
+                        }
+                        val quotaReqBody = reqBodyJson.toString().toRequestBody(jsonMediaType)
 
                         val quotaRequest = Request.Builder()
                             .url("https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary")
                             .addHeader("Authorization", "Bearer $accessToken")
-                            .addHeader("User-Agent", "antigravity/1.104.0 android/arm64")
-                            .addHeader("Client-Metadata", "{\"ideType\":\"ANTIGRAVITY\",\"platform\":\"ANDROID\",\"pluginType\":\"GEMINI\"}")
+                            .addHeader("User-Agent", userAgent)
+                            .addHeader("Client-Metadata", platformMetadata)
                             .post(quotaReqBody)
                             .build()
 
