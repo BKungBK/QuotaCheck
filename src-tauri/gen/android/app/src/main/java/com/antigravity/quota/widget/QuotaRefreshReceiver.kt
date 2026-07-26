@@ -9,7 +9,7 @@ class QuotaRefreshReceiver : BroadcastReceiver() {
 
     companion object {
         private const val KEY_LAST_REFRESH_TIME = "last_manual_refresh_time"
-        private const val COOLDOWN_MS = 60_000L // 60 seconds
+        private const val COOLDOWN_MS = 5_000L // 5 seconds
     }
 
     override fun onReceive(context: Context, intent: Intent) {

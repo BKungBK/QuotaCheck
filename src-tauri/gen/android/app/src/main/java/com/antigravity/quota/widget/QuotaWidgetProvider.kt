@@ -156,6 +156,12 @@ class QuotaWidgetProvider : AppWidgetProvider() {
                         }
                     }
                 } catch (_: Exception) {}
+            } else {
+                views.setImageViewResource(R.id.widget_status_dot, R.drawable.dot_offline)
+                views.setTextViewText(R.id.widget_status_text, "NO DATA")
+                views.setTextColor(R.id.widget_status_text, WidgetColors.DOT_OFFLINE)
+                views.setTextViewText(R.id.widget_source_text, "Tap 🔄 to sync")
+                views.setTextViewText(R.id.widget_time_ago_text, "Open app first")
             }
 
             return views
@@ -175,6 +181,7 @@ class QuotaWidgetProvider : AppWidgetProvider() {
             val views = buildRemoteViews(context)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
+        QuotaSyncWorker.triggerImmediateSync(context)
     }
 }
 

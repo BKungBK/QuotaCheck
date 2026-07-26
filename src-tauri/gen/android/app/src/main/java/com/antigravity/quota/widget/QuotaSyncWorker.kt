@@ -54,6 +54,7 @@ class QuotaSyncWorker(
     }
 
     override suspend fun doWork(): Result {
+        android.util.Log.d("QuotaSyncWorker", "Starting QuotaSyncWorker doWork execution")
         val prefs = QuotaPlugin.getSecurePreferences(context)
         val refreshToken = prefs.getString("refresh_token", "") ?: ""
 
@@ -65,6 +66,7 @@ class QuotaSyncWorker(
         val userAgent = "antigravity/1.104.0 windows/amd64"
 
         if (refreshToken.isNotEmpty()) {
+            android.util.Log.d("QuotaSyncWorker", "Refresh token found (length=${refreshToken.length})")
             val client = OkHttpClient.Builder()
                 .connectTimeout(12, TimeUnit.SECONDS)
                 .readTimeout(12, TimeUnit.SECONDS)
@@ -92,6 +94,7 @@ class QuotaSyncWorker(
                     val accessToken = tokenJson.optString("access_token", "")
 
                     if (accessToken.isNotEmpty()) {
+                        android.util.Log.d("QuotaSyncWorker", "OAuth token exchange successful")
                         // Step 2: Discover project_id via loadCodeAssist
                         var projectId: String? = null
                         try {
@@ -115,7 +118,9 @@ class QuotaSyncWorker(
                                 val loadJson = JSONObject(loadResponse.body?.string() ?: "{}")
                                 projectId = loadJson.optString("cloudaicompanionProject", "").ifEmpty { null }
                             }
-                        } catch (_: Exception) { /* fall through to step 3 */ }
+                        } catch (e: Exception) {
+                            android.util.Log.w("QuotaSyncWorker", "loadCodeAssist failed: ${e.message}")
+                        }
 
                         // Step 3: Fallback project discovery via ResourceManager
                         if (projectId == null) {
@@ -142,8 +147,12 @@ class QuotaSyncWorker(
                                         }
                                     }
                                 }
-                            } catch (_: Exception) { /* projectId stays null, body falls back to {} */ }
+                            } catch (e: Exception) {
+                                android.util.Log.w("QuotaSyncWorker", "ResourceManager failed: ${e.message}")
+                            }
                         }
+
+                        android.util.Log.d("QuotaSyncWorker", "Discovered project_id: $projectId")
 
                         // Step 4: Fetch retrieveUserQuotaSummary WITH project param
                         val jsonMediaType = "application/json; charset=utf-8".toMediaType()
@@ -169,25 +178,31 @@ class QuotaSyncWorker(
                             val quotaJson = JSONObject(quotaBodyString)
                             jsonPoolsArray = parseSummaryPools(quotaJson)
                             isOffline = false
+                            android.util.Log.d("QuotaSyncWorker", "Quota API success! Parsed ${jsonPoolsArray.length()} pools")
                         } else {
                             isOffline = true
                             errorReason = "Quota API HTTP ${quotaResponse.code}"
+                            android.util.Log.e("QuotaSyncWorker", "Quota API failed with HTTP ${quotaResponse.code}")
                         }
                     } else {
                         isOffline = true
                         errorReason = "Invalid OAuth token response"
+                        android.util.Log.e("QuotaSyncWorker", "Empty access_token received")
                     }
                 } else {
                     isOffline = true
                     errorReason = "OAuth exchange failed: ${tokenResponse.code}"
+                    android.util.Log.e("QuotaSyncWorker", "OAuth token exchange HTTP ${tokenResponse.code}")
                 }
             } catch (e: Exception) {
                 isOffline = true
                 errorReason = e.localizedMessage ?: "Network error"
+                android.util.Log.e("QuotaSyncWorker", "Sync exception: ${e.message}", e)
             }
         } else {
             isOffline = true
             errorReason = "No refresh token"
+            android.util.Log.w("QuotaSyncWorker", "No refresh_token stored in preferences")
         }
 
         // Fallback to existing cache if sync failed
@@ -219,6 +234,7 @@ class QuotaSyncWorker(
         }
 
         prefs.edit().putString("quota_cache", cacheObj.toString()).apply()
+        android.util.Log.d("QuotaSyncWorker", "Cache written to preferences. Updating widgets...")
 
         // Trigger Notifications check
         QuotaNotificationManager.checkAndNotify(context, jsonPoolsArray)
