@@ -1,11 +1,11 @@
 ---
 name: android-apk-builder
-description: Build, verify, and package the Android APK and home-screen widget in Tauri v2. Use whenever the user asks to build the Android app/APK, assemble debug/release APK, compile Android Kotlin code, test Android home-screen widget sync, or package the mobile build.
+description: Build, verify, package, and export the Android APK and home-screen widget in Tauri v2. Use whenever the user asks to build the Android app/APK, assemble debug/release APK, copy ready-to-install QuotaCheck APK to root, compile Android Kotlin code, test Android home-screen widget sync, or package the mobile build.
 ---
 
 # Android APK & Widget Build Skill
 
-> Complete workflow for building, testing, verifying, and packaging the Android app and native home-screen widget in this Tauri v2 codebase.
+> Complete workflow for building, testing, verifying, packaging, and exporting ready-to-install Android APKs (`QuotaCheck-debug.apk` / `QuotaCheck-release.apk`) in this Tauri v2 codebase.
 
 ## Prerequisites & Checklist
 
@@ -28,14 +28,16 @@ npx svelte-check
 
 ## Step 2: Execute Android Build
 
-Navigate to the Android native project directory or invoke via Gradle / Tauri CLI:
+Build the Android APK using Gradle or Tauri CLI.
 
-### Option A: Direct Gradle Build (Recommended for Widget/Kotlin Changes)
+### Option A: Gradle Build (Recommended for Native/Widget/Kotlin Changes)
 
 ```powershell
+# For Debug APK:
 cd src-tauri/gen/android
 .\gradlew assembleDebug
-# Or for release:
+
+# For Release APK:
 # .\gradlew assembleRelease
 ```
 
@@ -47,9 +49,9 @@ npx tauri android build --debug
 
 ---
 
-## Step 3: Android Widget & Native Logic Checklist
+## Step 3: Android Widget & Native Logic Verification
 
-When modifying native Android files, verify the following contracts:
+When modifying native Android files, verify the following core contracts:
 
 ### 1. Widget Colors (`QuotaWidgetProvider.kt`)
 - All constants in `WidgetColors` must map directly to `src/lib/theme.css` tokens:
@@ -69,23 +71,41 @@ When modifying native Android files, verify the following contracts:
 
 ---
 
-## Step 4: Output Artifact Locations
+## Step 4: Export Ready-to-Install APK to Project Root
 
-After successful assembly, APKs are located at:
+**IMPORTANT:** Always copy the freshly built APK from the Gradle build output folder to the project root directory so users and developers can easily find and download it:
 
-- **Debug APK:**
-  `src-tauri/gen/android/app/build/outputs/apk/debug/app-debug.apk`
-- **Release APK:**
-  `src-tauri/gen/android/app/build/outputs/apk/release/app-release-unsigned.apk`
+```powershell
+# Export Debug APK to root:
+Copy-Item -Path src-tauri\gen\android\app\build\outputs\apk\debug\app-debug.apk -Destination QuotaCheck-debug.apk -Force
+
+# Export Release APK to root (when available):
+# Copy-Item -Path src-tauri\gen\android\app\build\outputs\apk\release\app-release-unsigned.apk -Destination QuotaCheck-release.apk -Force
+```
+
+### Ready-to-Install APK Locations
+- **Debug APK (Root):** `QuotaCheck-debug.apk`
+- **Release APK (Root):** `QuotaCheck-release.apk`
 
 ---
 
-## Step 5: Git Commit & Release Workflow
+## Step 5: Test & Install via ADB (Optional)
 
-When committing build fixes:
+To test the generated APK directly on a connected Android device or emulator:
+
+```powershell
+adb install -r QuotaCheck-debug.apk
+```
+
+---
+
+## Step 6: Git Commit & Release Workflow
+
+When committing build fixes or updated skills:
 1. Commit isolated cosmetic/UI changes first (e.g. `fix(android): update widget colors`).
 2. Commit native logic/worker fixes second with clear root cause documentation.
-3. Push to remote:
+3. Commit updated skill and export documentation.
+4. Push to remote:
    ```powershell
    git push
    ```
