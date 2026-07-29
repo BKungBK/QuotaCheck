@@ -1,0 +1,60 @@
+package com.quotacheck.app.core.database
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+import com.quotacheck.app.core.database.entity.UsageSampleEntity
+
+data class DailyUsageAggregate(
+    val dayStartAt: Long,
+    val sampleCount: Int,
+    val averageRemainingFraction: Double,
+    val averageUsedUnits: Double?,
+)
+
+data class PeriodUsageAggregate(
+    val periodStartAt: Long,
+    val sampleCount: Int,
+    val averageRemainingFraction: Double,
+    val averageUsedUnits: Double?,
+)
+
+@Dao
+interface HistoryDao {
+    @Query("SELECT * FROM usage_samples WHERE poolId = :poolId ORDER BY receivedAt DESC LIMIT 1")
+    suspend fun latestSample(poolId: String): UsageSampleEntity?
+
+    @Insert
+    suspend fun insertSample(sample: UsageSampleEntity): Long
+
+    @Query("DELETE FROM usage_samples WHERE receivedAt < :cutoffAt")
+    suspend fun deleteSamplesBefore(cutoffAt: Long): Int
+
+    @Query("SELECT COUNT(*) FROM usage_samples")
+    suspend fun sampleCount(): Int
+
+    @Query(
+        "SELECT (receivedAt / 86400000) * 86400000 AS dayStartAt, " +
+            "COUNT(*) AS sampleCount, AVG(remainingFraction) AS averageRemainingFraction, " +
+            "AVG(usedUnits) AS averageUsedUnits " +
+            "FROM usage_samples WHERE poolId = :poolId AND receivedAt >= :fromAt AND receivedAt < :untilAt " +
+            "GROUP BY (receivedAt / 86400000) ORDER BY dayStartAt",
+    )
+    suspend fun dailyAggregates(poolId: String, fromAt: Long, untilAt: Long): List<DailyUsageAggregate>
+
+    @Query(
+        "SELECT (CAST(strftime('%s', date(receivedAt / 1000, 'unixepoch', 'weekday 1', '-7 days')) AS INTEGER) * 1000) AS periodStartAt, " +
+            "COUNT(*) AS sampleCount, AVG(remainingFraction) AS averageRemainingFraction, AVG(usedUnits) AS averageUsedUnits " +
+            "FROM usage_samples WHERE poolId = :poolId AND receivedAt >= :fromAt AND receivedAt < :untilAt " +
+            "GROUP BY periodStartAt ORDER BY periodStartAt",
+    )
+    suspend fun weeklyAggregates(poolId: String, fromAt: Long, untilAt: Long): List<PeriodUsageAggregate>
+
+    @Query(
+        "SELECT (CAST(strftime('%s', strftime('%Y-%m-01', receivedAt / 1000, 'unixepoch')) AS INTEGER) * 1000) AS periodStartAt, " +
+            "COUNT(*) AS sampleCount, AVG(remainingFraction) AS averageRemainingFraction, AVG(usedUnits) AS averageUsedUnits " +
+            "FROM usage_samples WHERE poolId = :poolId AND receivedAt >= :fromAt AND receivedAt < :untilAt " +
+            "GROUP BY periodStartAt ORDER BY periodStartAt",
+    )
+    suspend fun monthlyAggregates(poolId: String, fromAt: Long, untilAt: Long): List<PeriodUsageAggregate>
+}
