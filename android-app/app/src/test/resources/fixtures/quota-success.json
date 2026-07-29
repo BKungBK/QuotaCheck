@@ -1,0 +1,46 @@
+{
+  "groups": [
+    {
+      "displayName": "Synthetic Gemini",
+      "buckets": [
+        {
+          "bucketId": "synthetic-gemini-5h",
+          "displayName": "Synthetic Gemini",
+          "window": "5 hours",
+          "remainingFraction": 0.68,
+          "resetTime": "2030-01-01T03:00:00Z",
+          "disabled": false
+        },
+        {
+          "bucketId": "synthetic-gemini-weekly",
+          "displayName": "Synthetic Gemini Weekly",
+          "window": "Weekly",
+          "remainingFraction": 0.41,
+          "resetTime": "2030-01-07T00:00:00Z",
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "displayName": "Synthetic Claude",
+      "buckets": [
+        {
+          "bucketId": "synthetic-claude-5h",
+          "displayName": "Synthetic Claude",
+          "window": "5 hours",
+          "remainingFraction": 0.72,
+          "resetTime": "2030-01-01T04:00:00Z",
+          "disabled": false
+        },
+        {
+          "bucketId": "synthetic-claude-weekly",
+          "displayName": "Synthetic Claude Weekly",
+          "window": "Weekly",
+          "remainingFraction": 0.53,
+          "resetTime": "2030-01-07T00:00:00Z",
+          "disabled": false
+        }
+      ]
+    }
+  ]
+}

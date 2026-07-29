@@ -1,0 +1,17 @@
+{
+  "groups": [
+    {
+      "displayName": "Synthetic invalid group",
+      "buckets": [
+        {
+          "bucketId": 12345,
+          "displayName": "Synthetic invalid pool",
+          "window": "5 hours",
+          "remainingFraction": "not-a-number",
+          "resetTime": false,
+          "disabled": "not-a-boolean"
+        }
+      ]
+    }
+  ]
+}

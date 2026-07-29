@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": 500,
+    "message": "Synthetic provider failure",
+    "status": "INTERNAL"
+  }
+}
