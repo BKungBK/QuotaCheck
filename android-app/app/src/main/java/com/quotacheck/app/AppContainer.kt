@@ -22,7 +22,11 @@ import com.quotacheck.app.core.network.RedactingNetworkInterceptor
 import com.quotacheck.app.core.network.RetrofitQuotaRemoteDataSource
 import com.quotacheck.app.core.model.QuotaRepository
 import com.quotacheck.app.core.repository.OfflineFirstQuotaRepository
+import com.quotacheck.app.sync.AndroidWorkManagerGateway
+import com.quotacheck.app.sync.SyncScheduler
+import com.quotacheck.app.sync.WorkManagerSyncScheduler
 import kotlinx.serialization.json.Json
+import androidx.work.WorkManager
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -84,5 +88,9 @@ class AppContainer(context: Context) {
 
     val quotaRepository: QuotaRepository by lazy {
         OfflineFirstQuotaRepository(quotaDatabase, quotaRemoteDataSource, credentialVault, userPreferencesRepository)
+    }
+
+    val syncScheduler: SyncScheduler by lazy {
+        WorkManagerSyncScheduler(AndroidWorkManagerGateway(WorkManager.getInstance(applicationContext)))
     }
 }
