@@ -55,7 +55,11 @@ class AndroidCredentialVault(context: Context) : CredentialVault {
     }
 
     override suspend fun readRefreshToken(): CharArray? = mutex.withLock {
-        val payload = atomicFile.baseFile.takeIf(File::exists)?.readBytes() ?: return@withLock null
+        val payload = try {
+            atomicFile.readFully()
+        } catch (_: java.io.FileNotFoundException) {
+            return@withLock null
+        }
         try {
             if (!isValidPayload(payload)) return@withLock discardCorruptPayload()
 
@@ -110,12 +114,14 @@ class AndroidCredentialVault(context: Context) : CredentialVault {
 
     private fun deleteCiphertextOrThrow() {
         atomicFile.delete()
-        check(!atomicFile.baseFile.exists() && !backupFile().exists()) {
+        check(!atomicFile.baseFile.exists() && !backupFile().exists() && !newFile().exists()) {
             "Unable to remove encrypted credential"
         }
     }
 
     private fun backupFile(): File = File(atomicFile.baseFile.parentFile, "${atomicFile.baseFile.name}.bak")
+
+    private fun newFile(): File = File(atomicFile.baseFile.parentFile, "${atomicFile.baseFile.name}.new")
 
     private fun encode(token: CharArray): ByteArray {
         val encoded = Charsets.UTF_8.newEncoder()

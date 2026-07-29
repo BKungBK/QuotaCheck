@@ -2,4 +2,5 @@
 <full-backup-content>
     <exclude domain="file" path="credential_vault.bin" />
     <exclude domain="file" path="credential_vault.bin.bak" />
+    <exclude domain="file" path="credential_vault.bin.new" />
 </full-backup-content>

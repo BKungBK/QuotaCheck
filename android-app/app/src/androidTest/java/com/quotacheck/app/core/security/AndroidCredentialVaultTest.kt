@@ -15,6 +15,7 @@ class AndroidCredentialVaultTest {
     private val vault = AndroidCredentialVault(context)
     private val ciphertextFile = File(context.filesDir, "credential_vault.bin")
     private val backupFile = File(context.filesDir, "credential_vault.bin.bak")
+    private val newFile = File(context.filesDir, "credential_vault.bin.new")
 
     @After
     fun tearDown() = runBlocking { vault.clear() }
@@ -35,6 +36,7 @@ class AndroidCredentialVaultTest {
         assertNull(vault.readRefreshToken())
         assertFalse(ciphertextFile.exists())
         assertFalse(backupFile.exists())
+        assertFalse(newFile.exists())
     }
 
     @Test
@@ -71,10 +73,29 @@ class AndroidCredentialVaultTest {
     }
 
     @Test
+    fun interruptedAtomicWriteRecoversFromBackupWithoutReadingPlaintext() = runBlocking {
+        val token = "atomic-recovery-token".toCharArray()
+        vault.saveRefreshToken(token)
+        val priorCiphertext = ciphertextFile.readBytes()
+        try {
+            backupFile.writeBytes(priorCiphertext)
+            newFile.writeBytes(byteArrayOf(1))
+            assertTrue(ciphertextFile.delete())
+
+            assertArrayEquals(token, vault.readRefreshToken())
+            assertFalse(newFile.exists())
+        } finally {
+            priorCiphertext.fill(0)
+            token.fill('\u0000')
+        }
+    }
+
+    @Test
     fun packagedBackupExclusionsCoverCiphertextAndAtomicBackup() {
         listOf("backup_rules", "data_extraction_rules").forEach { resourceName ->
             assertTrue(resourceExcludes(resourceName, "credential_vault.bin"))
             assertTrue(resourceExcludes(resourceName, "credential_vault.bin.bak"))
+            assertTrue(resourceExcludes(resourceName, "credential_vault.bin.new"))
         }
     }
 
