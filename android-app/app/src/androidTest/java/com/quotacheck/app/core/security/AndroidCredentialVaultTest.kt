@@ -14,6 +14,7 @@ class AndroidCredentialVaultTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val vault = AndroidCredentialVault(context)
     private val ciphertextFile = File(context.filesDir, "credential_vault.bin")
+    private val backupFile = File(context.filesDir, "credential_vault.bin.bak")
 
     @After
     fun tearDown() = runBlocking { vault.clear() }
@@ -29,45 +30,75 @@ class AndroidCredentialVaultTest {
         vault.saveRefreshToken(replacement)
         assertArrayEquals(replacement, vault.readRefreshToken())
 
+        backupFile.writeBytes(byteArrayOf(1))
         vault.clear()
         assertNull(vault.readRefreshToken())
         assertFalse(ciphertextFile.exists())
+        assertFalse(backupFile.exists())
     }
 
     @Test
-    fun ciphertextFileDoesNotContainPlaintext() = runBlocking {
+    fun replaceUsesDifferentIvAndCiphertextDoesNotContainPlaintext() = runBlocking {
         val token = "plaintext-must-not-be-persisted".toCharArray()
         vault.saveRefreshToken(token)
-
-        val stored = ciphertextFile.readBytes()
+        val firstPayload = ciphertextFile.readBytes()
+        vault.saveRefreshToken(token)
+        val replacementPayload = ciphertextFile.readBytes()
         try {
-            assertFalse(stored.decodeToString().contains(token.concatToString()))
+            assertFalse(firstPayload.copyOfRange(1, 13).contentEquals(replacementPayload.copyOfRange(1, 13)))
+            assertFalse(containsSequence(replacementPayload, token.map { it.code.toByte() }.toByteArray()))
         } finally {
-            stored.fill(0)
+            firstPayload.fill(0)
+            replacementPayload.fill(0)
             token.fill('\u0000')
         }
     }
 
     @Test
-    fun backupRulesExcludeCredentialCiphertext() {
-        assertTrue(resourceExcludesCiphertext("backup_rules"))
-        assertTrue(resourceExcludesCiphertext("data_extraction_rules"))
+    fun tamperedAndTruncatedPayloadsAreRejectedAndRemoved() = runBlocking {
+        vault.saveRefreshToken("tamper-test-token".toCharArray())
+        val tampered = ciphertextFile.readBytes()
+        tampered[tampered.lastIndex] = (tampered.last().toInt() xor 1).toByte()
+        ciphertextFile.writeBytes(tampered)
+        tampered.fill(0)
+
+        assertNull(vault.readRefreshToken())
+        assertFalse(ciphertextFile.exists())
+
+        ciphertextFile.writeBytes(byteArrayOf(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+        assertNull(vault.readRefreshToken())
+        assertFalse(ciphertextFile.exists())
     }
 
-    private fun resourceExcludesCiphertext(resourceName: String): Boolean {
-        val resourceId = context.resources.getIdentifier(resourceName, "xml", context.packageName)
-        val parser = context.resources.getXml(resourceId)
+    @Test
+    fun packagedBackupExclusionsCoverCiphertextAndAtomicBackup() {
+        listOf("backup_rules", "data_extraction_rules").forEach { resourceName ->
+            assertTrue(resourceExcludes(resourceName, "credential_vault.bin"))
+            assertTrue(resourceExcludes(resourceName, "credential_vault.bin.bak"))
+        }
+    }
+
+    private fun xmlResourceId(resourceName: String): Int =
+        context.resources.getIdentifier(resourceName, "xml", context.packageName)
+
+    private fun resourceExcludes(resourceName: String, path: String): Boolean {
+        val parser = context.resources.getXml(xmlResourceId(resourceName))
         while (parser.eventType != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
             if (
                 parser.eventType == org.xmlpull.v1.XmlPullParser.START_TAG &&
                 parser.name == "exclude" &&
                 parser.getAttributeValue(null, "domain") == "file" &&
-                parser.getAttributeValue(null, "path") == "credential_vault.bin"
-            ) {
-                return true
-            }
+                parser.getAttributeValue(null, "path") == path
+            ) return true
             parser.next()
         }
         return false
+    }
+
+    private fun containsSequence(haystack: ByteArray, needle: ByteArray): Boolean {
+        if (needle.size > haystack.size) return false
+        return (0..haystack.size - needle.size).any { offset ->
+            needle.indices.all { index -> haystack[offset + index] == needle[index] }
+        }
     }
 }

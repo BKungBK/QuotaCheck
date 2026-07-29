@@ -3,23 +3,33 @@ package com.quotacheck.app.core.security
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import android.util.Base64
+import android.util.AtomicFile
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.CharBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
+import java.security.GeneralSecurityException
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Stores the refresh token only as Android Keystore-encrypted app-private data. */
 class AndroidCredentialVault(context: Context) : CredentialVault {
     private val applicationContext = context.applicationContext
+    private val mutex = Mutex()
+    private val atomicFile = AtomicFile(File(applicationContext.filesDir, CIPHERTEXT_FILE_NAME))
 
-    override suspend fun saveRefreshToken(token: CharArray) {
-        val plainText = token.concatToString().toByteArray(Charsets.UTF_8)
+    override suspend fun saveRefreshToken(token: CharArray) = mutex.withLock {
+        val plainText = encode(token)
         try {
             val cipher = Cipher.getInstance(TRANSFORMATION).apply {
-                // Android Keystore creates the required random IV for each encryption.
+                // Android Keystore creates a new random IV for every encryption.
                 init(Cipher.ENCRYPT_MODE, key())
             }
             val iv = cipher.iv
@@ -27,11 +37,11 @@ class AndroidCredentialVault(context: Context) : CredentialVault {
             val encrypted = cipher.doFinal(plainText)
             try {
                 val payload = ByteArray(1 + iv.size + encrypted.size)
-                payload[0] = FORMAT_VERSION
-                iv.copyInto(payload, destinationOffset = 1)
-                encrypted.copyInto(payload, destinationOffset = 1 + iv.size)
                 try {
-                    ciphertextFile().outputStream().use { output -> output.write(payload) }
+                    payload[0] = FORMAT_VERSION
+                    iv.copyInto(payload, destinationOffset = 1)
+                    encrypted.copyInto(payload, destinationOffset = 1 + iv.size)
+                    writeAtomically(payload)
                 } finally {
                     payload.fill(0)
                 }
@@ -44,11 +54,10 @@ class AndroidCredentialVault(context: Context) : CredentialVault {
         }
     }
 
-    override suspend fun readRefreshToken(): CharArray? {
-        val payload = ciphertextFile().takeIf(File::exists)?.readBytes() ?: return null
+    override suspend fun readRefreshToken(): CharArray? = mutex.withLock {
+        val payload = atomicFile.baseFile.takeIf(File::exists)?.readBytes() ?: return@withLock null
         try {
-            require(payload.size > 1 + IV_SIZE_BYTES) { "Invalid credential payload" }
-            require(payload[0] == FORMAT_VERSION) { "Unsupported credential payload" }
+            if (!isValidPayload(payload)) return@withLock discardCorruptPayload()
 
             val iv = payload.copyOfRange(1, 1 + IV_SIZE_BYTES)
             val encrypted = payload.copyOfRange(1 + IV_SIZE_BYTES, payload.size)
@@ -57,12 +66,16 @@ class AndroidCredentialVault(context: Context) : CredentialVault {
                     init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(GCM_TAG_SIZE_BITS, iv))
                     doFinal(encrypted)
                 }
+            } catch (_: GeneralSecurityException) {
+                return@withLock discardCorruptPayload()
             } finally {
                 iv.fill(0)
                 encrypted.fill(0)
             }
-            return try {
-                plainText.toString(Charsets.UTF_8).toCharArray()
+            try {
+                decode(plainText)
+            } catch (_: CharacterCodingException) {
+                discardCorruptPayload()
             } finally {
                 plainText.fill(0)
             }
@@ -71,11 +84,72 @@ class AndroidCredentialVault(context: Context) : CredentialVault {
         }
     }
 
-    override suspend fun clear() {
-        ciphertextFile().delete()
+    override suspend fun clear() = mutex.withLock { deleteCiphertextOrThrow() }
+
+    private fun writeAtomically(payload: ByteArray) {
+        var output: FileOutputStream? = null
+        try {
+            output = atomicFile.startWrite()
+            output.write(payload)
+            output.fd.sync()
+            atomicFile.finishWrite(output)
+            output = null
+        } catch (exception: Exception) {
+            output?.let(atomicFile::failWrite)
+            throw exception
+        }
     }
 
-    private fun ciphertextFile(): File = File(applicationContext.filesDir, CIPHERTEXT_FILE_NAME)
+    private fun isValidPayload(payload: ByteArray): Boolean =
+        payload.size >= 1 + IV_SIZE_BYTES + GCM_TAG_SIZE_BYTES && payload[0] == FORMAT_VERSION
+
+    private fun discardCorruptPayload(): CharArray? {
+        deleteCiphertextOrThrow()
+        return null
+    }
+
+    private fun deleteCiphertextOrThrow() {
+        atomicFile.delete()
+        check(!atomicFile.baseFile.exists() && !backupFile().exists()) {
+            "Unable to remove encrypted credential"
+        }
+    }
+
+    private fun backupFile(): File = File(atomicFile.baseFile.parentFile, "${atomicFile.baseFile.name}.bak")
+
+    private fun encode(token: CharArray): ByteArray {
+        val encoded = Charsets.UTF_8.newEncoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .encode(CharBuffer.wrap(token))
+        return try {
+            ByteArray(encoded.remaining()).also(encoded::get)
+        } finally {
+            zero(encoded)
+        }
+    }
+
+    private fun decode(bytes: ByteArray): CharArray {
+        val decoded = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(bytes))
+        return try {
+            CharArray(decoded.remaining()).also(decoded::get)
+        } finally {
+            zero(decoded)
+        }
+    }
+
+    private fun zero(buffer: ByteBuffer) {
+        buffer.clear()
+        while (buffer.hasRemaining()) buffer.put(0)
+    }
+
+    private fun zero(buffer: CharBuffer) {
+        buffer.clear()
+        while (buffer.hasRemaining()) buffer.put('\u0000')
+    }
 
     private fun key(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
@@ -104,6 +178,7 @@ class AndroidCredentialVault(context: Context) : CredentialVault {
         const val FORMAT_VERSION: Byte = 1
         const val IV_SIZE_BYTES = 12
         const val GCM_TAG_SIZE_BITS = 128
+        const val GCM_TAG_SIZE_BYTES = GCM_TAG_SIZE_BITS / 8
         const val KEY_SIZE_BITS = 256
     }
 }
