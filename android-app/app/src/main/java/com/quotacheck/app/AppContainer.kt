@@ -25,6 +25,9 @@ import com.quotacheck.app.core.repository.OfflineFirstQuotaRepository
 import com.quotacheck.app.sync.AndroidWorkManagerGateway
 import com.quotacheck.app.sync.SyncScheduler
 import com.quotacheck.app.sync.WorkManagerSyncScheduler
+import com.quotacheck.app.core.notifications.AlertDeliveryCoordinator
+import com.quotacheck.app.core.notifications.AlertEvaluator
+import com.quotacheck.app.core.notifications.AndroidNotificationPublisher
 import kotlinx.serialization.json.Json
 import androidx.work.WorkManager
 import okhttp3.OkHttpClient
@@ -92,5 +95,9 @@ class AppContainer(context: Context) {
 
     val syncScheduler: SyncScheduler by lazy {
         WorkManagerSyncScheduler(AndroidWorkManagerGateway(WorkManager.getInstance(applicationContext)))
+    }
+
+    val alertDeliveryCoordinator: AlertDeliveryCoordinator by lazy {
+        AlertDeliveryCoordinator(AlertEvaluator(), alertDao, AndroidNotificationPublisher(applicationContext))
     }
 }

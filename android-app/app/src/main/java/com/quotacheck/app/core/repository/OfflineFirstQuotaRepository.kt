@@ -68,11 +68,14 @@ class OfflineFirstQuotaRepository(
             val category = error.toFailureCategory()
             val failedAt = now()
             val persistenceFailure = runCatching {
+                val previousFailureCount = database.syncDao().latestSync()
+                    ?.takeIf { it.result == FAILURE }
+                    ?.consecutiveFailureCount ?: 0
                 database.syncDao().insert(
                     SyncRunEntity(
                         startedAt = failedAt.toEpochMilli(), finishedAt = failedAt.toEpochMilli(),
       trigger = trigger.name, result = FAILURE, errorCategory = if (error is RemoteError.AuthRequired) AUTH else category.name,
-                        consecutiveFailureCount = 1,
+                        consecutiveFailureCount = previousFailureCount + 1,
                     ),
                 )
             }.isFailure

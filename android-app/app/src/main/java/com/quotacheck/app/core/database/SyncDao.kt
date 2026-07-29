@@ -13,4 +13,7 @@ interface SyncDao {
 
     @Query("SELECT * FROM sync_runs ORDER BY COALESCE(finishedAt, startedAt) DESC LIMIT 1")
     fun observeLatestSync(): Flow<SyncRunEntity?>
+
+    @Query("SELECT * FROM sync_runs ORDER BY COALESCE(finishedAt, startedAt) DESC LIMIT 1")
+    suspend fun latestSync(): SyncRunEntity?
 }

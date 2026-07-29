@@ -14,5 +14,5 @@ data class AlertEventEntity(
     val cycleId: String?,
     val alertType: String,
     val thresholdPercent: Int?,
-    val deliveredAt: Long,
+    val deliveredAt: Long?,
 )

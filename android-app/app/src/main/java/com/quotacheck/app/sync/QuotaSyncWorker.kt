@@ -8,6 +8,7 @@ import com.quotacheck.app.QuotaCheckApp
 import com.quotacheck.app.core.model.FailureCategory
 import com.quotacheck.app.core.model.SyncResult
 import com.quotacheck.app.core.model.SyncTrigger
+import kotlinx.coroutines.flow.first
 
 class QuotaSyncWorker(
     appContext: Context,
@@ -17,8 +18,21 @@ class QuotaSyncWorker(
         val trigger = inputData.getString(TRIGGER_KEY)
             ?.let(SyncTrigger::valueOf)
             ?: SyncTrigger.PERIODIC
-        val repository = (applicationContext as QuotaCheckApp).appContainer.quotaRepository
-        return resultFor(repository.synchronize(trigger))
+        val container = (applicationContext as QuotaCheckApp).appContainer
+        val previousPools = container.quotaRepository.currentPools.first()
+        val consecutiveFailuresBefore = container.syncDao.latestSync()
+            ?.takeIf { it.result == "FAILURE" }
+            ?.consecutiveFailureCount ?: 0
+        val result = container.quotaRepository.synchronize(trigger)
+        container.alertDeliveryCoordinator.evaluateAndPublish(
+            previousPools = previousPools,
+            currentPools = container.quotaRepository.currentPools.first(),
+            result = result,
+            trigger = trigger,
+            preferences = container.userPreferencesRepository.preferences.first(),
+            consecutiveFailuresBefore = consecutiveFailuresBefore,
+        )
+        return resultFor(result)
     }
 
     companion object {
