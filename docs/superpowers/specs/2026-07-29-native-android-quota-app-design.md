@@ -14,8 +14,10 @@ API changes.
 
 The Android implementation must not reuse or port the existing Tauri, Svelte,
 Rust, generated Android, or historical Kotlin implementation. `DESIGN.md` is
-the only approved source from the existing product and is used solely for
-visual tokens and brand personality.
+used solely for visual tokens and brand personality. The only additional
+exception is narrowly reading the legacy quota client to document its private
+HTTP contract and locally import static OAuth compatibility values; no legacy
+application code is ported.
 
 ## 2. Success Criteria
 
@@ -232,15 +234,24 @@ device restart.
 - history retention, default 90 days
 - onboarding and notification-rationale completion
 
-## 7. Private API Feasibility Gate
+## 7. Unofficial Direct-API Compatibility Gate
 
-Implementation begins with an isolated discovery task and must not inspect or
-reuse the old QuotaCheck implementation.
+The owner has explicitly chosen a single-user, sideload-only compatibility
+mode. The Android app may issue the same normal HTTPS authentication and quota
+requests used by the old desktop project, without requiring a computer or
+hosted backend. This is an unofficial integration and may stop working when
+the provider changes its private API.
+
+As a narrow exception to the clean-room rule, the discovery task may inspect
+`src-tauri/src/quota_client.rs` and directly related configuration solely to
+extract the HTTP contract, field schema, and error behavior. No old
+architecture, UI, state management, storage, logging, or application code may
+be ported or reused.
 
 The discovery task must:
 
-1. Observe an authorized account session to identify token exchange and quota
-   requests.
+1. Extract the existing token exchange and quota request contract, then
+   validate it against the owner's authorized account when possible.
 2. Produce sanitized request and response fixtures with tokens, cookies,
    account identifiers, and unrelated payload fields removed.
 3. Confirm stable pool identifiers, remaining fraction, reset or cycle timing,
@@ -250,10 +261,18 @@ The discovery task must:
 5. Document required headers and token expiry behavior without recording live
    secrets.
 
-Implementation stops before application scaffolding if access requires TLS
-bypass, certificate-pinning bypass, account impersonation, or another
-mechanism that creates unacceptable account risk. This is a feasibility gate,
-not a request to circumvent provider security.
+The owner accepts that static OAuth client metadata and compatibility headers
+inside a personal APK can be extracted, that the API is unsupported, and that
+provider terms or behavior may change. This acceptance does not permit TLS or
+certificate-pinning bypass, account theft, use of another user's token, or
+distribution of credentials. The owner's refresh token is pasted at first run
+and encrypted with Android Keystore; it is never bundled in source or the APK.
+Raw private responses and authorization values are never logged.
+
+OAuth client values are supplied through a gitignored local properties file at
+build time rather than committed again. This reduces accidental repository
+leakage but is not claimed to make values embedded in the resulting APK
+secret. R8 is release hardening, not a credential-security boundary.
 
 ## 8. Sync Design
 

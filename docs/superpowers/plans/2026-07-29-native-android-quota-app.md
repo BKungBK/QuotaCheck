@@ -25,6 +25,10 @@
 - Default low threshold is 20%; default critical threshold is 10%.
 - Never log credentials, authorization headers, complete account email, or raw private responses.
 - Do not use TLS bypass, certificate-pinning bypass, CameraX, QR, barcode, widget, badge, foreground service, custom boot receiver, analytics, or crash-reporting SDK.
+- V1 is a single-owner, sideload-only unofficial direct-API compatibility mode; no hosted backend is used.
+- The user accepts that static OAuth client metadata and compatibility headers can be extracted from the APK and that the private API may change.
+- Reading the old project is permitted only in Task 1 to extract the HTTP contract and in the local secret-import step; never port its architecture, UI, storage, logging, or application code.
+- Never commit OAuth client values or the owner's refresh token. Load OAuth values from `android-app/private-api.properties`, which must be gitignored and absent from packaged resources.
 - Do not begin Tasks 2–15 unless Task 1 passes its feasibility gate.
 - Every task commits only its own files; preserve unrelated user changes.
 
@@ -95,7 +99,7 @@ resolve under `android-app/app/src/main/java/com/quotacheck/app/`.
 
 **Interfaces:**
 
-- Consumes: an authorized personal/team test account and permission to inspect its own traffic
+- Consumes: the owner's authorized account plus the narrowly authorized legacy API-client source
 - Produces: exact HTTPS base URL, token path, quota path, required non-secret headers, DTO field map, expiry behavior, synthetic sanitized fixtures, and `FEASIBLE` or `STOP` decision
 
 - [ ] **Step 1: Record the discovery rules before observing traffic**
@@ -106,7 +110,9 @@ Write the contract document with these mandatory headings:
 # Private Quota API Contract
 
 ## Decision
-`FEASIBLE` only when normal HTTPS requests work without bypassing provider security.
+`FEASIBLE` when the legacy contract uses normal HTTPS, exposes the required
+quota fields, and can be reproduced without TLS/certificate bypass. Record
+that this is an owner-accepted unofficial compatibility integration.
 
 ## Authentication Exchange
 Document method, HTTPS origin, path, content type, non-secret headers, request fields,
@@ -123,14 +129,17 @@ invalid JSON/shape to SchemaMismatch.
 ## Safety
 No live token, cookie, account identifier, authorization value, or raw capture is retained.
 No TLS or certificate-pinning bypass is permitted.
+Static OAuth values are not copied into this committed contract.
 ```
 
 - [ ] **Step 2: Observe only the authorized session**
 
-Use the provider's normal client/session and the operating system's approved
-developer/network tooling. Do not read old QuotaCheck source or git history.
-If normal observation cannot identify a callable contract without bypassing
-TLS or pinning, set Decision to `STOP` and end the implementation.
+Inspect only `src-tauri/src/quota_client.rs` and directly referenced
+configuration to extract method, HTTPS origin/path, content type, required
+headers, request fields, response fields, refresh behavior, and error mapping.
+Do not copy logging, storage, UI, architecture, or unrelated behavior. Validate
+against the owner's normal session when available. If the contract requires
+TLS or certificate-pinning bypass, set Decision to `STOP`.
 
 - [ ] **Step 3: Create synthetic fixtures**
 
@@ -164,8 +173,11 @@ Expected: matches only explanatory field names or synthetic values; no live secr
 
 Expected:
 
-- `FEASIBLE`: stable HTTPS request, refresh-token exchange, pool ID, remaining fraction, and reset/cycle data confirmed.
-- `STOP`: security bypass required, account risk unacceptable, or core quota fields unavailable.
+- `FEASIBLE`: normal HTTPS request, refresh-token exchange, pool ID, remaining
+  fraction, and reset/cycle data are extractable; the contract explicitly
+  records unsupported/private-API and APK-extraction risks accepted by the
+  single owner.
+- `STOP`: TLS/certificate bypass is required or core quota fields are unavailable.
 
 - [ ] **Step 6: Commit**
 
@@ -177,11 +189,14 @@ git commit -m "docs: capture sanitized private quota contract"
 **Worker prompt:**
 
 ```text
-Read the approved Android spec, Global Constraints, and Task 1 only. Perform a
-clean-room feasibility study on an authorized account. Never inspect old
-QuotaCheck implementation or retain secrets. Produce the exact contract and
-synthetic fixtures. Stop and report STOP if any TLS/pinning bypass is required.
-Do not scaffold the Android app beyond the fixture directories.
+Read the approved Android spec, Global Constraints, and Task 1 only. The owner
+explicitly authorizes reading the old quota client solely to extract its HTTP
+contract for a single-owner, sideload-only unofficial compatibility adapter.
+Do not port implementation code or retain secrets. Produce the sanitized
+contract and synthetic fixtures. Record accepted unsupported-API and
+extractable-static-metadata risks. Stop only if TLS/pinning bypass is required
+or core quota fields are unavailable. Do not scaffold the Android app beyond
+the fixture directories.
 ```
 
 ---
@@ -196,6 +211,8 @@ Do not scaffold the Android app beyond the fixture directories.
 - Create: `android-app/settings.gradle.kts`
 - Create: `android-app/build.gradle.kts`
 - Create: `android-app/gradle.properties`
+- Create: `android-app/.gitignore`
+- Create: `android-app/private-api.properties.example`
 - Create: `android-app/gradle/libs.versions.toml`
 - Create: `android-app/gradlew`
 - Create: `android-app/gradlew.bat`
@@ -279,6 +296,16 @@ libraries used by this plan. For Vico, declare only
 `com.patrykandpatrick.vico:compose-m3:3.2.3`. Configure KSP only for Room. Do
 not add Hilt, Dagger, an image loader, another chart library, analytics, or
 crash reporting.
+
+`android-app/.gitignore` must contain `/private-api.properties`.
+`private-api.properties.example` contains names only:
+
+```properties
+oauthClientId=
+oauthClientSecret=
+```
+
+The real local properties file must never be staged or packaged as a resource.
 
 - [ ] **Step 5: Verify existing tools and generate the wrapper without downloads**
 
@@ -579,6 +606,7 @@ plaintext remains in storage.
 
 **Files:**
 
+- Create: `scripts/import-private-api-compat.ps1`
 - Create: `core/network/PrivateQuotaApi.kt`
 - Create: `core/network/PrivateApiContract.kt`
 - Create: `core/network/dto/TokenDtos.kt`
@@ -587,6 +615,7 @@ plaintext remains in storage.
 - Create: `core/network/QuotaRemoteDataSource.kt`
 - Create: `core/network/RetrofitQuotaRemoteDataSource.kt`
 - Modify: `android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt`
+- Modify: `android-app/app/build.gradle.kts`
 - Create: `android-app/app/src/test/java/com/quotacheck/app/core/network/PrivateQuotaContractTest.kt`
 
 **Interfaces:**
@@ -623,12 +652,22 @@ timeouts, Kotlin serialization with unknown-key tolerance, a redacting
 interceptor, and no body-level network logging. Wire Retrofit and the data
 source lazily in `AppContainer`.
 
+`scripts/import-private-api-compat.ps1` may read only the authorized legacy
+quota-client constants and writes `android-app/private-api.properties` without
+printing values. Gradle loads `oauthClientId` and `oauthClientSecret` into
+release `BuildConfig` fields, fails release builds when either is missing, and
+never copies the properties file into resources or assets. The script must
+refuse to run if its output path resolves outside
+`E:\QuotaCheck\android-app`.
+
 - [ ] **Step 4: Run secret scan, tests, and commit**
 
 ```powershell
 rg -n -i "bearer [a-z0-9._-]+|refresh_token\s*[:=]\s*[^\" ]+" android-app/app/src
+git check-ignore android-app/private-api.properties
+git status --short -- android-app/private-api.properties
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 testDebugUnitTest --tests "*PrivateQuotaContractTest"
-git add android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt android-app/app/src/main/java/com/quotacheck/app/core/network android-app/app/src/test/java/com/quotacheck/app/core/network
+git add scripts/import-private-api-compat.ps1 android-app/app/build.gradle.kts android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt android-app/app/src/main/java/com/quotacheck/app/core/network android-app/app/src/test/java/com/quotacheck/app/core/network
 git commit -m "feat: add private quota API adapter"
 ```
 
@@ -637,7 +676,9 @@ git commit -m "feat: add private quota API adapter"
 ```text
 Implement Task 7 only from the approved sanitized contract. Do not infer or
 invent endpoints. Use MockWebServer fixtures, redact all auth data, prohibit
-cleartext and trust-all TLS, and keep DTOs inside core/network.
+cleartext and trust-all TLS, and keep DTOs inside core/network. Import legacy
+OAuth values only into the gitignored local properties file without printing
+them; never commit them or claim they are protected inside the APK.
 ```
 
 ---
