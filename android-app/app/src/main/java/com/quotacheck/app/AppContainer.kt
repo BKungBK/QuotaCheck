@@ -20,6 +20,8 @@ import com.quotacheck.app.core.network.QuotaRemoteDataSource
 import com.quotacheck.app.core.network.ResourceManagerApi
 import com.quotacheck.app.core.network.RedactingNetworkInterceptor
 import com.quotacheck.app.core.network.RetrofitQuotaRemoteDataSource
+import com.quotacheck.app.core.model.QuotaRepository
+import com.quotacheck.app.core.repository.OfflineFirstQuotaRepository
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -78,5 +80,9 @@ class AppContainer(context: Context) {
             oauthClientSecret = BuildConfig.OAUTH_CLIENT_SECRET,
             cloudCodeBaseUrl = PrivateApiContract.CLOUD_CODE_BASE_URL.toHttpUrl(),
         )
+    }
+
+    val quotaRepository: QuotaRepository by lazy {
+        OfflineFirstQuotaRepository(quotaDatabase, quotaRemoteDataSource, credentialVault, userPreferencesRepository)
     }
 }

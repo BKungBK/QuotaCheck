@@ -5,8 +5,8 @@ import androidx.room.RoomDatabase
 import androidx.room.withTransaction
 import com.quotacheck.app.core.database.entity.AlertEventEntity
 import com.quotacheck.app.core.database.entity.QuotaPoolEntity
-import com.quotacheck.app.core.database.entity.SyncRunEntity
 import com.quotacheck.app.core.database.entity.UsageSampleEntity
+import com.quotacheck.app.core.database.entity.SyncRunEntity
 import com.quotacheck.app.core.model.QuotaPool
 
 @Database(
@@ -45,6 +45,26 @@ abstract class QuotaDatabase : RoomDatabase() {
     /** Keeps persistence state consistent before downstream alert evaluation. */
     suspend fun recordAlertEvent(event: AlertEventEntity): Long = withTransaction {
         alertDao().insertIgnore(event)
+    }
+
+    /** Commits every success-side effect together, so UI can only observe durable state. */
+    suspend fun commitSuccessfulSync(
+        pools: List<QuotaPoolEntity>,
+        syncRun: SyncRunEntity,
+        retentionCutoffAt: Long,
+    ) = withTransaction {
+        val historyDao = historyDao()
+        quotaDao().clearCurrentPools()
+        quotaDao().insertCurrentPools(pools)
+        pools.forEach { pool ->
+            val previous = historyDao.latestSample(pool.poolId)
+            if (previous == null || previous.remainingFraction != pool.remainingFraction || previous.totalUnits != pool.totalUnits ||
+                previous.usedUnits != pool.usedUnits || previous.remainingUnits != pool.remainingUnits ||
+                previous.cycleEndAt != pool.cycleEndAt
+            ) historyDao.insertSample(pool.toSample())
+        }
+        historyDao.deleteSamplesBefore(retentionCutoffAt)
+        syncDao().insert(syncRun)
     }
 
     private fun QuotaPoolEntity.toSample() = UsageSampleEntity(
