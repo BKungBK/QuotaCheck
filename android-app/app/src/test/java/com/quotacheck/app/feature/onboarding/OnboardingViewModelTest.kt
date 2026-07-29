@@ -9,6 +9,8 @@ import com.quotacheck.app.core.model.SyncTrigger
 import com.quotacheck.app.core.network.QuotaRemoteDataSource
 import com.quotacheck.app.core.preferences.UserPreferencesRepository
 import com.quotacheck.app.core.security.CredentialVault
+import com.quotacheck.app.core.model.UserPreferences
+import com.quotacheck.app.sync.SyncScheduler
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,10 +37,11 @@ class OnboardingViewModelTest {
     }
 
     @Test fun validTokenCompletesInitialSync() = runBlocking {
-        val vault = FakeVault(); val preferences = FakePreferences()
-        val viewModel = newViewModel(vault, FakeRemote(), FakeRepository(), preferences)
+        val vault = FakeVault(); val preferences = FakePreferences(); val scheduler = FakeScheduler()
+        val viewModel = newViewModel(vault, FakeRemote(), FakeRepository(), preferences, scheduler)
         viewModel.submitTokenNow("secret".toCharArray())
         assertTrue(vault.saved); assertTrue(preferences.onboardingCompleted)
+        assertEquals(1, scheduler.ensured)
         assertEquals(OnboardingUiState.Connected, viewModel.uiState.value)
     }
 
@@ -60,8 +63,21 @@ class OnboardingViewModelTest {
         assertTrue(vault.cleared); assertEquals(OnboardingUiState.InitialSyncFailed, viewModel.uiState.value)
     }
 
-    private fun newViewModel(vault: FakeVault, remote: FakeRemote, repository: QuotaRepository, preferences: FakePreferences = FakePreferences()) =
-        OnboardingViewModel(vault, remote, repository, preferences)
+    private fun newViewModel(
+        vault: FakeVault,
+        remote: FakeRemote,
+        repository: QuotaRepository,
+        preferences: FakePreferences = FakePreferences(),
+        scheduler: FakeScheduler = FakeScheduler(),
+    ) = OnboardingViewModel(vault, remote, repository, preferences, scheduler)
+
+    private class FakeScheduler : SyncScheduler {
+        var ensured = 0
+        override fun schedulePeriodic(preferences: UserPreferences) = Unit
+        override fun ensurePeriodic(preferences: UserPreferences) { ensured++ }
+        override fun cancelPeriodic() = Unit
+        override fun refreshNow() = Unit
+    }
 
     private class FakeVault : CredentialVault {
         var saved = false; var cleared = false
@@ -87,6 +103,7 @@ class OnboardingViewModelTest {
         override suspend fun setAutoSyncEnabled(enabled: Boolean) = Unit
         override suspend fun setSyncIntervalMinutes(minutes: Int) = Unit
         override suspend fun setWifiOnly(enabled: Boolean) = Unit
+        override suspend fun setLowQuotaNotificationsEnabled(enabled: Boolean) = Unit
         override suspend fun setLowThresholdPercent(percent: Int) = Unit
         override suspend fun setCriticalThresholdPercent(percent: Int) = Unit
         override suspend fun setResetNotificationsEnabled(enabled: Boolean) = Unit

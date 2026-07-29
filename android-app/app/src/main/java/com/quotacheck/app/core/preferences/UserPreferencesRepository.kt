@@ -10,6 +10,7 @@ interface UserPreferencesRepository {
     suspend fun setAutoSyncEnabled(enabled: Boolean)
     suspend fun setSyncIntervalMinutes(minutes: Int)
     suspend fun setWifiOnly(enabled: Boolean)
+    suspend fun setLowQuotaNotificationsEnabled(enabled: Boolean)
     suspend fun setLowThresholdPercent(percent: Int)
     suspend fun setCriticalThresholdPercent(percent: Int)
     suspend fun setResetNotificationsEnabled(enabled: Boolean)

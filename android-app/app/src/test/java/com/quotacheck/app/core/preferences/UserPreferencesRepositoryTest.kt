@@ -23,6 +23,7 @@ class UserPreferencesRepositoryTest {
                 autoSyncEnabled = true,
                 syncIntervalMinutes = 30,
                 wifiOnly = false,
+                lowQuotaNotificationsEnabled = true,
                 lowThresholdPercent = 20,
                 criticalThresholdPercent = 10,
                 resetNotificationsEnabled = true,
@@ -42,6 +43,7 @@ class UserPreferencesRepositoryTest {
         repository.setAutoSyncEnabled(false)
         repository.setSyncIntervalMinutes(120)
         repository.setWifiOnly(true)
+        repository.setLowQuotaNotificationsEnabled(false)
         repository.setLowThresholdPercent(30)
         repository.setCriticalThresholdPercent(15)
         repository.setResetNotificationsEnabled(false)
@@ -57,6 +59,7 @@ class UserPreferencesRepositoryTest {
                 autoSyncEnabled = false,
                 syncIntervalMinutes = 120,
                 wifiOnly = true,
+                lowQuotaNotificationsEnabled = false,
                 lowThresholdPercent = 30,
                 criticalThresholdPercent = 15,
                 resetNotificationsEnabled = false,

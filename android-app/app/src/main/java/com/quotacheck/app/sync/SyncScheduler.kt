@@ -6,6 +6,8 @@ import com.quotacheck.app.core.model.UserPreferences
 interface SyncScheduler {
     fun schedulePeriodic(preferences: UserPreferences)
 
+    fun ensurePeriodic(preferences: UserPreferences) = schedulePeriodic(preferences)
+
     fun cancelPeriodic()
 
     fun refreshNow()

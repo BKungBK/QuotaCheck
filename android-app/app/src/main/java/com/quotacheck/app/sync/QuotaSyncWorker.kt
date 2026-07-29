@@ -9,12 +9,14 @@ import com.quotacheck.app.core.model.FailureCategory
 import com.quotacheck.app.core.model.SyncResult
 import com.quotacheck.app.core.model.SyncTrigger
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class QuotaSyncWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = syncMutex.withLock {
         val trigger = inputData.getString(TRIGGER_KEY)
             ?.let(SyncTrigger::valueOf)
             ?: SyncTrigger.PERIODIC
@@ -32,11 +34,12 @@ class QuotaSyncWorker(
             preferences = container.userPreferencesRepository.preferences.first(),
             consecutiveFailuresBefore = consecutiveFailuresBefore,
         )
-        return resultFor(result)
+        resultFor(result)
     }
 
     companion object {
         const val TRIGGER_KEY = "sync_trigger"
+        private val syncMutex = Mutex()
 
         internal fun resultFor(syncResult: SyncResult): Result = when (syncResult) {
             is SyncResult.Success, SyncResult.Unconfigured -> Result.success()

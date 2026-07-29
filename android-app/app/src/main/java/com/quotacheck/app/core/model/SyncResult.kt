@@ -7,7 +7,7 @@ sealed interface SyncResult {
     data class Success(val updatedAt: Instant, val poolCount: Int) : SyncResult
     data object Unconfigured : SyncResult
     data object AuthRequired : SyncResult
-    data class Failed(val category: FailureCategory) : SyncResult
+    data class Failed(val category: FailureCategory, val failedAt: Instant = Instant.EPOCH) : SyncResult
 }
 
 enum class FailureCategory { RATE_LIMITED, RETRYABLE, SCHEMA, REMOTE, PERSISTENCE }

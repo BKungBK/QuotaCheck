@@ -46,7 +46,13 @@ class AndroidWorkManagerGateway(private val workManager: WorkManager) : WorkMana
 }
 
 class WorkManagerSyncScheduler(private val workManager: WorkManagerGateway) : SyncScheduler {
-    override fun schedulePeriodic(preferences: UserPreferences) {
+    override fun schedulePeriodic(preferences: UserPreferences) =
+        enqueuePeriodic(preferences, ExistingPeriodicWorkPolicy.UPDATE)
+
+    override fun ensurePeriodic(preferences: UserPreferences) =
+        enqueuePeriodic(preferences, ExistingPeriodicWorkPolicy.KEEP)
+
+    private fun enqueuePeriodic(preferences: UserPreferences, policy: ExistingPeriodicWorkPolicy) {
         val request = PeriodicWorkRequestBuilder<QuotaSyncWorker>(
             preferences.syncIntervalMinutes.toLong(),
             TimeUnit.MINUTES,
@@ -55,7 +61,7 @@ class WorkManagerSyncScheduler(private val workManager: WorkManagerGateway) : Sy
             .setInputData(triggerData(SyncTrigger.PERIODIC))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
             .build()
-        workManager.enqueueUniquePeriodicWork(PERIODIC_WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
+        workManager.enqueueUniquePeriodicWork(PERIODIC_WORK_NAME, policy, request)
     }
 
     override fun cancelPeriodic() = workManager.cancelUniqueWork(PERIODIC_WORK_NAME)

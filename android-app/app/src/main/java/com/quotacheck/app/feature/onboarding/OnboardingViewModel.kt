@@ -9,6 +9,7 @@ import com.quotacheck.app.core.model.SyncTrigger
 import com.quotacheck.app.core.network.QuotaRemoteDataSource
 import com.quotacheck.app.core.preferences.UserPreferencesRepository
 import com.quotacheck.app.core.security.CredentialVault
+import com.quotacheck.app.sync.SyncScheduler
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,7 @@ class OnboardingViewModel(
     private val remote: QuotaRemoteDataSource,
     private val repository: QuotaRepository,
     private val preferences: UserPreferencesRepository,
+    private val scheduler: SyncScheduler,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow<OnboardingUiState>(OnboardingUiState.Loading)
     val uiState: StateFlow<OnboardingUiState> = mutableUiState
@@ -63,6 +65,7 @@ class OnboardingViewModel(
                 return
             }
             preferences.setOnboardingCompleted(true)
+            preferences.preferences.first().takeIf { it.autoSyncEnabled }?.let(scheduler::ensurePeriodic)
             mutableUiState.value = OnboardingUiState.Connected
         } catch (error: CancellationException) {
             mutableUiState.value = OnboardingUiState.InitialSyncFailed
@@ -78,6 +81,7 @@ class OnboardingViewModel(
 
     fun onHomeVisible() = viewModelScope.launch {
         val saved = preferences.preferences.first()
+        if (saved.autoSyncEnabled) scheduler.ensurePeriodic(saved) else scheduler.cancelPeriodic()
         mutableNotificationPermissionRequested.value =
             mutableUiState.value is OnboardingUiState.Connected && !saved.notificationRationaleCompleted && mutableAlertsEnabled.value
     }
@@ -99,10 +103,11 @@ class OnboardingViewModelFactory(
     private val remote: QuotaRemoteDataSource,
     private val repository: QuotaRepository,
     private val preferences: UserPreferencesRepository,
+    private val scheduler: SyncScheduler,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         check(modelClass.isAssignableFrom(OnboardingViewModel::class.java))
-        return OnboardingViewModel(vault, remote, repository, preferences) as T
+        return OnboardingViewModel(vault, remote, repository, preferences, scheduler) as T
     }
 }

@@ -10,6 +10,7 @@ data class UserPreferences(
     val autoSyncEnabled: Boolean = true,
     val syncIntervalMinutes: Int = 30,
     val wifiOnly: Boolean = false,
+    val lowQuotaNotificationsEnabled: Boolean = true,
     val lowThresholdPercent: Int = 20,
     val criticalThresholdPercent: Int = 10,
     val resetNotificationsEnabled: Boolean = true,

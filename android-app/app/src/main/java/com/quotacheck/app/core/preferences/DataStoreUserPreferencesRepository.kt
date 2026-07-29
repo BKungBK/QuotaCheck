@@ -19,6 +19,7 @@ class DataStoreUserPreferencesRepository(
             autoSyncEnabled = stored[AUTO_SYNC_ENABLED] ?: true,
             syncIntervalMinutes = stored[SYNC_INTERVAL_MINUTES] ?: 30,
             wifiOnly = stored[WIFI_ONLY] ?: false,
+            lowQuotaNotificationsEnabled = stored[LOW_QUOTA_NOTIFICATIONS_ENABLED] ?: true,
             lowThresholdPercent = stored[LOW_THRESHOLD_PERCENT] ?: 20,
             criticalThresholdPercent = stored[CRITICAL_THRESHOLD_PERCENT] ?: 10,
             resetNotificationsEnabled = stored[RESET_NOTIFICATIONS_ENABLED] ?: true,
@@ -41,6 +42,9 @@ class DataStoreUserPreferencesRepository(
     }
 
     override suspend fun setWifiOnly(enabled: Boolean) = write(WIFI_ONLY, enabled)
+
+    override suspend fun setLowQuotaNotificationsEnabled(enabled: Boolean) =
+        write(LOW_QUOTA_NOTIFICATIONS_ENABLED, enabled)
 
     override suspend fun setLowThresholdPercent(percent: Int) {
         require(percent in MIN_PERCENT..MAX_PERCENT) { "Low threshold must be between 1 and 100." }
@@ -101,6 +105,7 @@ class DataStoreUserPreferencesRepository(
         val AUTO_SYNC_ENABLED = booleanPreferencesKey("auto_sync_enabled")
         val SYNC_INTERVAL_MINUTES = intPreferencesKey("sync_interval_minutes")
         val WIFI_ONLY = booleanPreferencesKey("wifi_only")
+        val LOW_QUOTA_NOTIFICATIONS_ENABLED = booleanPreferencesKey("low_quota_notifications_enabled")
         val LOW_THRESHOLD_PERCENT = intPreferencesKey("low_threshold_percent")
         val CRITICAL_THRESHOLD_PERCENT = intPreferencesKey("critical_threshold_percent")
         val RESET_NOTIFICATIONS_ENABLED = booleanPreferencesKey("reset_notifications_enabled")

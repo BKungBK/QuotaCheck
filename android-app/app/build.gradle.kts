@@ -15,12 +15,26 @@ val privateApiProperties = Properties().apply {
 
 val oauthClientId = privateApiProperties.getProperty("oauthClientId", "")
 val oauthClientSecret = privateApiProperties.getProperty("oauthClientSecret", "")
+val releaseStoreFile = System.getenv("QUOTACHECK_STORE_FILE").orEmpty()
+val releaseStorePassword = System.getenv("QUOTACHECK_STORE_PASSWORD").orEmpty()
+val releaseKeyAlias = System.getenv("QUOTACHECK_KEY_ALIAS").orEmpty()
+val releaseKeyPassword = System.getenv("QUOTACHECK_KEY_PASSWORD").orEmpty()
+val missingReleaseSigningVariables = listOf(
+    "QUOTACHECK_STORE_FILE" to releaseStoreFile,
+    "QUOTACHECK_STORE_PASSWORD" to releaseStorePassword,
+    "QUOTACHECK_KEY_ALIAS" to releaseKeyAlias,
+    "QUOTACHECK_KEY_PASSWORD" to releaseKeyPassword,
+).filter { (_, value) -> value.isBlank() }.map { (name, _) -> name }
 
 tasks.configureEach {
     if (name.contains("release", ignoreCase = true)) {
         doFirst {
             check(oauthClientId.isNotBlank() && oauthClientSecret.isNotBlank()) {
                 "Release builds require android-app/private-api.properties."
+            }
+            check(missingReleaseSigningVariables.isEmpty()) {
+                "Release builds require signing environment variables: " +
+                    missingReleaseSigningVariables.joinToString(", ")
             }
         }
     }
@@ -49,6 +63,14 @@ android {
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.create("release").apply {
+                if (missingReleaseSigningVariables.isEmpty()) {
+                    storeFile = file(releaseStoreFile)
+                    storePassword = releaseStorePassword
+                    keyAlias = releaseKeyAlias
+                    keyPassword = releaseKeyPassword
+                }
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -98,6 +120,7 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.junit4)
+    androidTestImplementation(libs.mockwebserver)
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestRuntimeOnly(libs.androidx.test.runner)
 

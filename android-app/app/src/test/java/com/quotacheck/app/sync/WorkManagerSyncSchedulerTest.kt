@@ -38,6 +38,14 @@ class WorkManagerSyncSchedulerTest {
         assertEquals(NetworkType.UNMETERED, requireNotNull(gateway.periodicRequest).workSpec.constraints.requiredNetworkType)
     }
 
+    @Test fun `ensure periodic keeps an existing schedule`() {
+        val gateway = RecordingWorkManagerGateway()
+
+        WorkManagerSyncScheduler(gateway).ensurePeriodic(UserPreferences())
+
+        assertEquals(ExistingPeriodicWorkPolicy.KEEP, gateway.periodicPolicy)
+    }
+
     @Test fun `periodic work supports every allowed interval`() {
         listOf(30, 60, 120, 240).forEach { interval ->
             val gateway = RecordingWorkManagerGateway()

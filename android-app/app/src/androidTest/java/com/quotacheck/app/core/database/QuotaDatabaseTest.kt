@@ -96,6 +96,26 @@ class QuotaDatabaseTest {
         assertEquals(1, database.alertDao().count())
     }
 
+    @Test
+    fun alertDeliveryClaim_isAtomicAndRecoversOnlyAfterTimeout() = runBlocking {
+        val event = AlertEventEntity(
+            alertKey = "pool:10000:LOW:20",
+            poolId = "pool",
+            cycleId = "10000",
+            alertType = "LOW",
+            thresholdPercent = 20,
+            deliveredAt = null,
+        )
+        val dao = database.alertDao()
+        dao.insertIgnore(event)
+
+        assertEquals(1, dao.claimDelivery(event.alertKey, claimToken = -1_000L, staleBefore = 0L))
+        assertEquals(0, dao.claimDelivery(event.alertKey, claimToken = -1_001L, staleBefore = 999L))
+        assertEquals(1, dao.claimDelivery(event.alertKey, claimToken = -2_000L, staleBefore = 1_000L))
+        assertEquals(1, dao.markDelivered(event.alertKey, claimToken = -2_000L, deliveredAt = 2_001L))
+        assertEquals(0, dao.claimDelivery(event.alertKey, claimToken = -3_000L, staleBefore = 3_000L))
+    }
+
     private fun pool(
         poolId: String,
         receivedAt: Long = 1L,

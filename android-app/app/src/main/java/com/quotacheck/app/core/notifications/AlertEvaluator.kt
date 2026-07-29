@@ -17,10 +17,10 @@ class AlertEvaluator {
     ): List<AlertCommand> = when (result) {
         is SyncResult.Success -> successCommands(
             previousPools.associateBy { it.poolId }, currentPools, trigger, preferences,
-            consecutiveFailuresBefore,
+            consecutiveFailuresBefore, result.updatedAt.toEpochMilli(),
         )
         is SyncResult.Failed -> if (preferences.failureNotificationsEnabled && consecutiveFailuresBefore + 1 == FAILURE_NOTIFY_COUNT) {
-            listOf(AlertCommand.SyncFailure(FAILURE_NOTIFY_COUNT))
+            listOf(AlertCommand.SyncFailure(FAILURE_NOTIFY_COUNT, result.failedAt.toEpochMilli()))
         } else emptyList()
         SyncResult.AuthRequired, SyncResult.Unconfigured -> emptyList()
     }
@@ -31,6 +31,7 @@ class AlertEvaluator {
         trigger: SyncTrigger,
         preferences: UserPreferences,
         consecutiveFailuresBefore: Int,
+        syncEventEpoch: Long,
     ): List<AlertCommand> = buildList {
         currentPools.forEach { current ->
             val previous = previousById[current.poolId] ?: return@forEach
@@ -40,11 +41,13 @@ class AlertEvaluator {
             ) add(AlertCommand.Reset(current.poolId, cycleEnd))
 
             thresholdCommand(previous, current, preferences.criticalThresholdPercent, AlertType.CRITICAL)?.let(::add)
-            thresholdCommand(previous, current, preferences.lowThresholdPercent, AlertType.LOW)?.let(::add)
+            if (preferences.lowQuotaNotificationsEnabled) {
+                thresholdCommand(previous, current, preferences.lowThresholdPercent, AlertType.LOW)?.let(::add)
+            }
         }
         if (preferences.successNotificationsEnabled &&
             (trigger == SyncTrigger.MANUAL || consecutiveFailuresBefore > 0)
-        ) add(AlertCommand.SyncSuccess(consecutiveFailuresBefore))
+        ) add(AlertCommand.SyncSuccess(consecutiveFailuresBefore, syncEventEpoch))
     }
 
     private fun thresholdCommand(
@@ -87,16 +90,16 @@ sealed interface AlertCommand {
         override val type = "RESET"
         override val thresholdOrZero = 0
     }
-    data class SyncFailure(val count: Int) : AlertCommand {
+    data class SyncFailure(val count: Int, val eventEpoch: Long) : AlertCommand {
         override val poolId: String? = null
-        override val cycleEndEpoch = count.toLong()
+        override val cycleEndEpoch = eventEpoch
         override val type = "SYNC_FAILURE"
-        override val thresholdOrZero = 0
+        override val thresholdOrZero = count
     }
-    data class SyncSuccess(val recoveredFromFailures: Int) : AlertCommand {
+    data class SyncSuccess(val recoveredFromFailures: Int, val eventEpoch: Long) : AlertCommand {
         override val poolId: String? = null
-        override val cycleEndEpoch = recoveredFromFailures.toLong()
+        override val cycleEndEpoch = eventEpoch
         override val type = "SYNC_SUCCESS"
-        override val thresholdOrZero = 0
+        override val thresholdOrZero = recoveredFromFailures
     }
 }

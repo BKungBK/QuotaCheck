@@ -55,8 +55,11 @@ class AndroidNotificationPublisher(private val context: Context) : NotificationP
 
     private fun contentIntent(command: AlertCommand): PendingIntent = PendingIntent.getActivity(
         context, command.alertKey.hashCode(), Intent(context, MainActivity::class.java)
-            .setAction("com.quotacheck.app.OPEN_ALERT")
-            .putExtra("alert_key", command.alertKey), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            .setAction(NotificationDeepLink.ACTION_OPEN_NOTIFICATION)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(NotificationDeepLink.EXTRA_ROUTE, NotificationDeepLink.routeFor(command))
+            .putExtra(NotificationDeepLink.EXTRA_ALERT_KEY, command.alertKey),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
     private fun refreshIntent(): PendingIntent = PendingIntent.getBroadcast(

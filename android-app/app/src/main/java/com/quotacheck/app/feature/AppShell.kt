@@ -23,7 +23,11 @@ import com.quotacheck.app.navigation.QuotaCheckNavHost
 val AppShellMinTouchTarget = 48.dp
 
 @Composable
-fun AppShell(content: (@Composable (PaddingValues) -> Unit)? = null) {
+fun AppShell(
+    notificationRoute: String? = null,
+    onNotificationRouteHandled: () -> Unit = {},
+    content: (@Composable (PaddingValues) -> Unit)? = null,
+) {
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
@@ -56,6 +60,8 @@ fun AppShell(content: (@Composable (PaddingValues) -> Unit)? = null) {
         content?.invoke(innerPadding) ?: QuotaCheckNavHost(
             navController = navController,
             modifier = Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding),
+            notificationRoute = notificationRoute,
+            onNotificationRouteHandled = onNotificationRouteHandled,
         )
     }
 }

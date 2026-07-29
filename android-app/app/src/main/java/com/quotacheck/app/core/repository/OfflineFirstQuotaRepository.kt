@@ -94,9 +94,9 @@ class OfflineFirstQuotaRepository(
                     ),
                 )
             }.isFailure
-            return if (persistenceFailure) SyncResult.Failed(FailureCategory.PERSISTENCE)
+            return if (persistenceFailure) SyncResult.Failed(FailureCategory.PERSISTENCE, failedAt)
             else if (category == FailureCategory.REMOTE && error is RemoteError.AuthRequired) SyncResult.AuthRequired
-            else SyncResult.Failed(category)
+            else SyncResult.Failed(category, failedAt)
         } finally {
             token.fill('\u0000')
             refreshTracker.finish()

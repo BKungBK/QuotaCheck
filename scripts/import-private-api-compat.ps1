@@ -1,10 +1,16 @@
 [CmdletBinding()]
 param(
-  [string]$SourcePath = (Join-Path $PSScriptRoot '..\src-tauri\src\quota_client.rs'),
-  [string]$OutputPath = (Join-Path $PSScriptRoot '..\android-app\private-api.properties')
+  [string]$SourcePath,
+  [string]$OutputPath
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($SourcePath)) {
+  $SourcePath = Join-Path $PSScriptRoot '..\src-tauri\src\quota_client.rs'
+}
+if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+  $OutputPath = Join-Path $PSScriptRoot '..\android-app\private-api.properties'
+}
 $allowedRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\android-app'))
 $resolvedOutput = [IO.Path]::GetFullPath($OutputPath)
 if (-not $resolvedOutput.StartsWith($allowedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {

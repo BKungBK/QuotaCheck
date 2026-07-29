@@ -1,12 +1,10 @@
 package com.quotacheck.app.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -21,9 +19,27 @@ import com.quotacheck.app.feature.home.HomeViewModelFactory
 import com.quotacheck.app.feature.history.HistoryScreen
 import com.quotacheck.app.feature.history.HistoryViewModel
 import com.quotacheck.app.feature.history.HistoryViewModelFactory
+import com.quotacheck.app.feature.alerts.AlertsScreen
+import com.quotacheck.app.feature.alerts.AlertsViewModel
+import com.quotacheck.app.feature.alerts.AlertsViewModelFactory
+import com.quotacheck.app.feature.settings.SettingsScreen
+import com.quotacheck.app.feature.settings.SettingsViewModel
+import com.quotacheck.app.feature.settings.SettingsViewModelFactory
 
 @Composable
-fun QuotaCheckNavHost(navController: NavHostController, modifier: Modifier = Modifier) {
+fun QuotaCheckNavHost(
+    navController: NavHostController,
+    modifier: Modifier = Modifier,
+    notificationRoute: String? = null,
+    onNotificationRouteHandled: () -> Unit = {},
+) {
+    LaunchedEffect(notificationRoute) {
+        val destination = Destination.bottomNavigation.firstOrNull { it.route == notificationRoute } ?: return@LaunchedEffect
+        if (navController.currentDestination?.route != destination.route) {
+            navController.navigate(destination.route) { launchSingleTop = true }
+        }
+        onNotificationRouteHandled()
+    }
     NavHost(navController = navController, startDestination = Destination.Home.route, modifier = modifier) {
         composable(Destination.Home.route) {
             val container = (LocalContext.current.applicationContext as QuotaCheckApp).appContainer
@@ -37,13 +53,20 @@ fun QuotaCheckNavHost(navController: NavHostController, modifier: Modifier = Mod
             val state by viewModel.uiState.collectAsStateWithLifecycle()
             HistoryScreen(state, viewModel::selectPool, viewModel::selectPeriod)
         }
-        Destination.bottomNavigation.filter { it != Destination.Home && it != Destination.History }.forEach { destination -> composable(destination.route) { DestinationPlaceholder(destination.label) } }
-    }
-}
-
-@Composable
-private fun DestinationPlaceholder(label: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = label, style = MaterialTheme.typography.titleLarge)
+        composable(Destination.Alerts.route) {
+            val context = LocalContext.current
+            val container = (context.applicationContext as QuotaCheckApp).appContainer
+            val viewModel: AlertsViewModel = viewModel(factory = AlertsViewModelFactory(container.userPreferencesRepository))
+            val state by viewModel.uiState.collectAsStateWithLifecycle()
+            AlertsScreen(state, viewModel::setLowThreshold, viewModel::setLowQuotaEnabled, viewModel::setCriticalThreshold, viewModel::setResetEnabled, viewModel::setFailureEnabled, viewModel::setSuccessEnabled, onOpenNotificationSettings = {
+                context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+            })
+        }
+        composable(Destination.Settings.route) {
+            val container = (LocalContext.current.applicationContext as QuotaCheckApp).appContainer
+            val viewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(container.userPreferencesRepository, container.credentialVault, container.syncScheduler, container.quotaDatabase, container.quotaRepository))
+            val state by viewModel.uiState.collectAsStateWithLifecycle()
+            SettingsScreen(state, viewModel::setAutoSync, viewModel::setInterval, viewModel::setWifiOnly, viewModel::setTheme, viewModel::setRetention, viewModel::clearHistory, viewModel::removeCredential)
+        }
     }
 }
