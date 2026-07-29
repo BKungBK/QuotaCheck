@@ -17,9 +17,11 @@ import com.quotacheck.app.core.security.CredentialVault
 import java.math.BigDecimal
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 
 class OfflineFirstQuotaRepository(
     private val database: QuotaDatabase,
@@ -28,11 +30,13 @@ class OfflineFirstQuotaRepository(
     private val preferences: UserPreferencesRepository,
     private val now: () -> Instant = Instant::now,
 ) : QuotaRepository {
+    private val refreshTracker = RefreshTracker()
+    private val forcedSyncState = MutableStateFlow<SyncState?>(null)
     override val currentPools: Flow<List<QuotaPool>> = database.quotaDao().observeCurrentPools().map { pools ->
         pools.map { it.toDomain() }
     }
 
-    override val syncState: Flow<SyncState> = combine(
+    private val databaseSyncState: Flow<SyncState> = combine(
         database.quotaDao().observeCurrentPools(),
         database.syncDao().observeLatestSync(),
     ) { pools, run ->
@@ -45,8 +49,19 @@ class OfflineFirstQuotaRepository(
         }
     }
 
+    override val syncState: Flow<SyncState> = combine(databaseSyncState, refreshTracker.activeCount, forcedSyncState) {
+            databaseState, refreshing, forcedState ->
+        val stableState = forcedState ?: databaseState
+        stableState.withRefreshOverlay(refreshing > 0)
+    }
+
     override suspend fun synchronize(trigger: SyncTrigger): SyncResult {
-        val token = credentialVault.readRefreshToken() ?: return SyncResult.Unconfigured
+        val token = credentialVault.readRefreshToken() ?: run {
+            forcedSyncState.value = SyncState.Unconfigured
+            return SyncResult.Unconfigured
+        }
+        forcedSyncState.value = null
+        refreshTracker.begin()
         try {
             val fetched = remote.fetchQuota(token).getOrElse { throw it }
             val finishedAt = now()
@@ -84,6 +99,7 @@ class OfflineFirstQuotaRepository(
             else SyncResult.Failed(category)
         } finally {
             token.fill('\u0000')
+            refreshTracker.finish()
         }
     }
 
@@ -106,4 +122,20 @@ class OfflineFirstQuotaRepository(
         const val FAILURE = "FAILURE"
         const val AUTH = "AUTH_REQUIRED"
     }
+}
+
+internal fun SyncState.withRefreshOverlay(refreshing: Boolean): SyncState =
+    if (refreshing && this !is SyncState.Unconfigured) SyncState.Refreshing(this) else this
+
+internal class RefreshTracker {
+    private val mutableActiveCount = MutableStateFlow(0)
+    val activeCount: Flow<Int> = mutableActiveCount
+
+    fun begin() = mutableActiveCount.update { it + 1 }
+
+    fun finish() = mutableActiveCount.update { (it - 1).coerceAtLeast(0) }
+
+    val isRefreshing: Boolean get() = mutableActiveCount.value > 0
+
+    fun activeCountValue(): Int = mutableActiveCount.value
 }

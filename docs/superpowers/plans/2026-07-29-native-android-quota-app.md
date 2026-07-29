@@ -961,9 +961,10 @@ ErrorEmpty, and Refreshing while cached content remains visible.
 
 - [ ] **Step 2: Write failing Compose tests**
 
-At 360×800/default font, assert four rows and footer are visible without
-scrolling. At large font or five pools, assert content scrolls while bottom
-navigation remains visible.
+Use the connected Infinix viewport as the primary visual-fit target: assert
+four rows and footer are visible without scrolling. Keep the production layout
+responsive rather than fixed-size. At large font, constrained height, or five
+pools, assert content scrolls while bottom navigation remains visible.
 
 - [ ] **Step 3: Implement Home**
 
@@ -983,7 +984,8 @@ git commit -m "feat: add pool-first quota home"
 
 ```text
 Implement Task 13 only from the approved pool-first mockup. No summary card.
-Prove four-row fit at 360x800 and accessible scrolling for constrained layouts.
+Prove four-row fit on the connected Infinix and accessible responsive scrolling
+for large-font or constrained layouts; do not hard-code the production viewport.
 ```
 
 ---
