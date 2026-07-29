@@ -11,6 +11,8 @@ import com.quotacheck.app.core.database.QuotaDatabase
 import com.quotacheck.app.core.database.SyncDao
 import com.quotacheck.app.core.preferences.DataStoreUserPreferencesRepository
 import com.quotacheck.app.core.preferences.UserPreferencesRepository
+import com.quotacheck.app.core.security.AndroidCredentialVault
+import com.quotacheck.app.core.security.CredentialVault
 
 /**
  * Application-scoped dependency root. Feature dependencies are added here as
@@ -35,4 +37,6 @@ class AppContainer(context: Context) {
             ),
         )
     }
+
+    val credentialVault: CredentialVault by lazy { AndroidCredentialVault(applicationContext) }
 }
