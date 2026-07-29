@@ -188,4 +188,3 @@ Only the narrowly authorized legacy HTTP contract was inspected:
 - `src-tauri/src/quota_client.rs:1146-1202`: primary and fallback quota requests
 - `src-tauri/src/lib.rs:305-308`: normal-TLS cloud client
 - `src-tauri/src/lib.rs:310-313`: excluded invalid-certificate local client
-
