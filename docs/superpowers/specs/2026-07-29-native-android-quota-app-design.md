@@ -95,6 +95,7 @@ unidirectional data flow, manual constructor injection, Room, DataStore,
 WorkManager, Coroutines and Flow, Retrofit, OkHttp, and Kotlin serialization.
 An application-scoped `AppContainer` wires dependencies without Hilt/Dagger or
 annotation-processing overhead beyond Room's required KSP processor.
+History charts use Vico 3.2.3 with only its Compose and Material 3 modules.
 
 The dependency direction is:
 
@@ -333,7 +334,12 @@ History uses the approved Bars + Timeline layout:
 - Daily breakdown with exact values and sample counts
 - Empty explanation when history has not accumulated enough samples
 
-The chart is drawn with Compose primitives to avoid a chart dependency in V1.
+The chart uses Vico 3.2.3's Compose-native Cartesian chart API. Only
+`com.patrykandpatrick.vico:compose` and
+`com.patrykandpatrick.vico:compose-m3` are included; Material 2, Glance, and
+other Vico modules are excluded. Exact values remain available in the timeline
+and accessibility semantics, so the chart is not the sole representation of
+usage data.
 
 ### Alerts
 
@@ -531,6 +537,21 @@ to E once, avoiding a network download; all later Gradle state stays on E.
 Android instrumented and manual tests run on a physical USB-debugging device.
 Only Maven dependencies required by the app may be downloaded during the first
 build.
+
+### Storage Budget
+
+- Existing D-drive Android SDK: no additional space; reuse the installed
+  approximately 5.88 GB
+- New E-drive Gradle distribution, dependency cache, build output, and
+  temporary files: approximately 2-3 GB during normal development
+- E-drive peak allowance during clean release and device-test builds: 4 GB
+- Vico incremental Gradle-cache cost: expected below 3 MB because Compose and
+  Material 3 are already required
+- Release APK target: 10-18 MB
+- Installed app plus 90-day local history target: below 80 MB
+
+These are planning estimates. Task 15 records actual APK, installed-app, cache,
+and build-directory sizes before release.
 
 ## 19. Implementation Order
 

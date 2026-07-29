@@ -6,7 +6,7 @@
 
 **Architecture:** One Gradle application module organized by feature-first packages. Compose ViewModels consume repository flows; Room is the observable source of truth; the provider adapter, credential vault, WorkManager pipeline, and notification publisher remain isolated behind interfaces. A small application-scoped `AppContainer` performs manual constructor injection.
 
-**Tech Stack:** Kotlin 2.3.x, AGP 8.13.2, Gradle 8.14.3, existing JDK 17, compile/target SDK 36, min SDK 26, Compose BOM 2026.06.00, Material 3 1.4.0, Room 2.8.4, DataStore 1.2.1, WorkManager 2.11.2, Lifecycle 2.10.0, Navigation Compose 2.9.8, Retrofit 3.0.0, OkHttp 5.3.0, Coroutines 1.11.0, Kotlin serialization, and KSP 2.3.9 for Room only. Pin the latest stable Kotlin 2.3 patch that AGP 8.13.2 supports when Task 2 starts; do not add a library unless an implemented V1 feature needs it.
+**Tech Stack:** Kotlin 2.3.21, AGP 8.13.2, Gradle 8.14.3, existing JDK 17, compile/target SDK 36, min SDK 26, Compose BOM 2026.06.00, Material 3 1.4.0, Vico 3.2.3, Room 2.8.4, DataStore 1.2.1, WorkManager 2.11.2, Lifecycle 2.10.0, Navigation Compose 2.9.8, Retrofit 3.0.0, OkHttp 5.3.0, Coroutines 1.11.0, Kotlin serialization, and KSP 2.3.9 for Room only. Do not add a library unless an implemented V1 feature needs it.
 
 ## Global Constraints
 
@@ -17,6 +17,8 @@
 - Do not install Android Studio, emulator/AVD/system images, NDK, another JDK, standalone Gradle, API 37, or Build Tools 36.
 - Use manual constructor injection through `AppContainer`; do not add Hilt or Dagger.
 - Run device tests on a physical USB-debugging Android phone.
+- For charts, add only Vico 3.2.3 `compose` and `compose-m3`; do not add its Material 2, Glance, or other modules.
+- Keep normal new development data on E within approximately 3 GB and peak build usage within 4 GB; target release APK 10-18 MB and installed app plus data below 80 MB.
 - Use one account and pasted refresh-token onboarding in V1.
 - Keep Room as the only observable quota/history source of truth.
 - Default auto-sync interval is 30 minutes; default history retention is 90 days.
@@ -267,12 +269,16 @@ $env:TMP = 'E:\tmp\android'
 
 - [ ] **Step 4: Create the version catalog**
 
-Use AGP `8.13.2`, Gradle `8.14.3`, Java 17, compile/target API 36, min API
-26, and Build Tools 35.0.0. Pin stable API-36-compatible versions of Compose,
-Material 3, Room, DataStore, WorkManager, Lifecycle, Navigation Compose,
-Retrofit, OkHttp, Coroutines, Kotlin serialization, and only the test
-libraries used by this plan. Configure KSP only for Room. Do not add Hilt,
-Dagger, an image loader, chart library, analytics, or crash reporting.
+Use Kotlin `2.3.21`, AGP `8.13.2`, Gradle `8.14.3`, Java 17, compile/target
+API 36, min API 26, and Build Tools 35.0.0. Pin the listed
+API-36-compatible versions of Compose,
+Material 3, Vico 3.2.3, Room, DataStore, WorkManager, Lifecycle, Navigation
+Compose, Retrofit, OkHttp, Coroutines, Kotlin serialization, and only the test
+libraries used by this plan. For Vico, declare only
+`com.patrykandpatrick.vico:compose:3.2.3` and
+`com.patrykandpatrick.vico:compose-m3:3.2.3`. Configure KSP only for Room. Do
+not add Hilt, Dagger, an image loader, another chart library, analytics, or
+crash reporting.
 
 - [ ] **Step 5: Verify existing tools and generate the wrapper without downloads**
 
@@ -956,7 +962,7 @@ Prove four-row fit at 360x800 and accessible scrolling for constrained layouts.
 **Interfaces:**
 
 - Consumes: Room day/week/month aggregate Flow
-- Produces pool selector, period control, Compose bar chart, daily breakdown
+- Produces pool selector, period control, Vico Cartesian bar chart, daily breakdown
 
 - [ ] **Step 1: Write failing period/aggregation tests**
 
@@ -964,10 +970,13 @@ Test selected-pool switching, Day/Week/Month boundaries in device locale,
 nullable-unit fallback to percentage consumed, and insufficient-history empty
 state.
 
-- [ ] **Step 2: Implement chart without external chart library**
+- [ ] **Step 2: Implement the Vico chart**
 
-Use Compose Canvas with semantic descriptions for every bar, stable scaling,
-tabular labels, and no animation when reduced motion is active.
+Use Vico's Compose Material 3 Cartesian column chart with design tokens from
+the approved spec. Keep semantic descriptions for every bar, stable scaling,
+tabular labels, and no animation when reduced motion is active. Do not add
+Vico Material 2, Glance, or a second chart library. The timeline below the
+chart remains the exact-value and accessibility fallback.
 
 - [ ] **Step 3: Run and commit**
 
@@ -981,8 +990,9 @@ git commit -m "feat: add quota usage history"
 **Worker prompt:**
 
 ```text
-Implement Task 14 only. Use the approved bars-plus-timeline layout and Compose
-Canvas, not a chart dependency. Preserve semantic access to exact values.
+Implement Task 14 only. Use the approved bars-plus-timeline layout with Vico
+3.2.3 Compose and Material 3 modules only. Preserve semantic access to exact
+values and do not add another chart dependency.
 ```
 
 ---
@@ -1057,7 +1067,31 @@ Verify:
 - absent: camera, foreground service, app widget, custom boot receiver, badge
   metadata
 
-- [ ] **Step 8: Run local real-account smoke checklist**
+- [ ] **Step 8: Measure actual storage**
+
+Record the release APK size and these E-drive directory totals in
+`docs/release/android-internal-release-checklist.md`:
+
+```powershell
+$paths = @(
+  'E:\Android\.gradle',
+  'E:\QuotaCheck\android-app\app\build',
+  'E:\tmp\android'
+)
+foreach ($path in $paths) {
+  $bytes = (Get-ChildItem -LiteralPath $path -Recurse -File |
+    Measure-Object -Property Length -Sum).Sum
+  '{0}: {1:N2} GB' -f $path, ($bytes / 1GB)
+}
+Get-Item 'E:\QuotaCheck\android-app\app\build\outputs\apk\release\app-release.apk' |
+  Select-Object FullName, @{Name='SizeMB';Expression={[math]::Round($_.Length / 1MB, 2)}}
+```
+
+After installing, record the app size shown by Android Settings > Apps >
+QuotaCheck > Storage. Investigate before release if E-drive peak usage exceeds
+4 GB, the release APK exceeds 18 MB, or installed app plus data exceeds 80 MB.
+
+- [ ] **Step 9: Run local real-account smoke checklist**
 
 Never put the token in source or CI. On the user's actual phone, verify
 notification permission, heads-up, restricted lock screen, shade,
@@ -1065,7 +1099,7 @@ offline/reconnect, reboot scheduling, dark/light/system themes, and four-pool
 fit. API 26 compatibility is enforced by `minSdk`, lint, and automated tests;
 do not install an emulator merely to expand the device matrix.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```powershell
 git add android-app/app/src/main/java/com/quotacheck/app/feature/alerts android-app/app/src/main/java/com/quotacheck/app/feature/settings android-app/app/src/androidTest docs/release android-app/app/build.gradle.kts android-app/app/proguard-rules.pro
