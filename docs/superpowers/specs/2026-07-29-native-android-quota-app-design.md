@@ -33,6 +33,9 @@ visual tokens and brand personality.
   data.
 - No credential, authorization header, complete account email, or raw private
   API response is written to logs.
+- Project files, Android SDK packages, Gradle caches, emulator images, build
+  outputs, and Android-specific temporary files use drive D or E rather than
+  consuming substantial space on drive C.
 
 ## 3. V1 Scope
 
@@ -495,7 +498,34 @@ are never added to CI.
 - Android Lint, unit tests, instrumented tests, and release assembly must pass
   before distribution
 
-## 18. Implementation Order
+## 18. Local Development Storage
+
+Large Android development files must remain on drive D or E. The planned
+Windows layout is:
+
+- Project: `E:\QuotaCheck\android-app`
+- Android SDK: `E:\Android\Sdk`
+- Gradle user home and dependency cache: `E:\Android\.gradle`
+- Android user home: `E:\Android\.android`
+- Emulator and AVD images: `E:\Android\avd`
+- Android-specific temporary files: `E:\tmp\android`
+- Optional standalone JDK: `E:\Android\jdk`
+- Android Studio application: `D:\Apps\AndroidStudio` or another user-selected
+  D/E location
+
+Setup scripts and developer documentation must configure
+`ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_USER_HOME`,
+`ANDROID_AVD_HOME`, `GRADLE_USER_HOME`, and task-scoped `TEMP`/`TMP` values
+before dependency installation, Gradle execution, or emulator creation.
+
+Build outputs stay under `E:\QuotaCheck\android-app`; Gradle local properties
+point to the E-drive SDK. No implementation task may intentionally install an
+SDK, emulator system image, Gradle distribution, or build cache under the
+Windows user profile on drive C. Small operating-system metadata or Codex
+configuration files may remain on C when Windows or the installed application
+requires them, but they must not contain large Android toolchains or caches.
+
+## 19. Implementation Order
 
 1. Private API feasibility and sanitized contract fixtures
 2. Android project foundation, design system, and dependency injection
