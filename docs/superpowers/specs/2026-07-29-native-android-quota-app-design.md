@@ -33,9 +33,9 @@ visual tokens and brand personality.
   data.
 - No credential, authorization header, complete account email, or raw private
   API response is written to logs.
-- Project files, Android SDK packages, Gradle caches, emulator images, build
-  outputs, and Android-specific temporary files use drive D or E rather than
-  consuming substantial space on drive C.
+- Project files, Android SDK, Gradle caches, build outputs, and Android-specific
+  temporary files use drive D or E rather than consuming substantial space on
+  drive C. Existing small tools on C may be reused instead of downloaded again.
 
 ## 3. V1 Scope
 
@@ -91,8 +91,10 @@ app/
 ```
 
 The application uses Kotlin, Jetpack Compose, Material 3, MVVM with
-unidirectional data flow, Hilt, Room, DataStore, WorkManager, Coroutines and
-Flow, Retrofit, OkHttp, and Kotlin serialization.
+unidirectional data flow, manual constructor injection, Room, DataStore,
+WorkManager, Coroutines and Flow, Retrofit, OkHttp, and Kotlin serialization.
+An application-scoped `AppContainer` wires dependencies without Hilt/Dagger or
+annotation-processing overhead beyond Room's required KSP processor.
 
 The dependency direction is:
 
@@ -475,14 +477,18 @@ boot receiver or reboot logic.
 
 ### Manual Release Matrix
 
-- Android 8 through the latest supported Android release
-- Android 13+ notification permission
+- User's primary physical Android phone over USB debugging
+- Android 13+ notification permission when applicable
 - heads-up, restricted lock screen, and notification shade
 - offline launch and reconnection
 - reboot and delayed WorkManager execution
 - battery optimization behavior
 - dark, light, and system themes
-- signed release build on a real internal device
+- signed release build installed on the real internal device
+
+API 26 compatibility is checked by `minSdk`, Android Lint, and automated tests.
+V1 does not download emulator or system images solely to expand the device
+matrix.
 
 A real-account smoke test runs only as a local release checklist. Live tokens
 are never added to CI.
@@ -500,30 +506,31 @@ are never added to CI.
 
 ## 18. Local Development Storage
 
-Large Android development files must remain on drive D or E. The planned
-Windows layout is:
+The project uses the smallest working command-line toolchain. Existing
+installations are reused; no IDE or virtual-device stack is required. The
+verified Windows layout is:
 
 - Project: `E:\QuotaCheck\android-app`
-- Android SDK: `E:\Android\Sdk`
+- Android SDK: `D:\Android\Sdk`
 - Gradle user home and dependency cache: `E:\Android\.gradle`
 - Android user home: `E:\Android\.android`
-- Emulator and AVD images: `E:\Android\avd`
 - Android-specific temporary files: `E:\tmp\android`
-- Optional standalone JDK: `E:\Android\jdk`
-- Android Studio application: `D:\Apps\AndroidStudio` or another user-selected
-  D/E location
+- Existing JDK 17: `C:\Users\KK\AppData\Local\Programs\Eclipse Adoptium\jdk-17.0.15.6-hotspot`
 
 Setup scripts and developer documentation must configure
 `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_USER_HOME`,
-`ANDROID_AVD_HOME`, `GRADLE_USER_HOME`, and task-scoped `TEMP`/`TMP` values
-before dependency installation, Gradle execution, or emulator creation.
+`GRADLE_USER_HOME`, `JAVA_HOME`, and task-scoped `TEMP`/`TMP` values before
+dependency installation or Gradle execution.
 
 Build outputs stay under `E:\QuotaCheck\android-app`; Gradle local properties
-point to the E-drive SDK. No implementation task may intentionally install an
-SDK, emulator system image, Gradle distribution, or build cache under the
-Windows user profile on drive C. Small operating-system metadata or Codex
-configuration files may remain on C when Windows or the installed application
-requires them, but they must not contain large Android toolchains or caches.
+point to the D-drive SDK. V1 reuses installed API 36, Build Tools 35.0.0,
+Platform Tools, command-line tools, and JDK 17. It does not install Android
+Studio, an emulator, AVD/system images, NDK, another JDK, or standalone Gradle.
+The existing Gradle 8.14.3 archive may be copied from the current C-drive cache
+to E once, avoiding a network download; all later Gradle state stays on E.
+Android instrumented and manual tests run on a physical USB-debugging device.
+Only Maven dependencies required by the app may be downloaded during the first
+build.
 
 ## 19. Implementation Order
 

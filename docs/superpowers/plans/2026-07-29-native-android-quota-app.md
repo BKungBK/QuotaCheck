@@ -4,16 +4,19 @@
 
 **Goal:** Build a clean-room native Android APK that securely reads private-provider quota data, stores offline history, synchronizes in the background, and delivers deduplicated Android notifications.
 
-**Architecture:** One Gradle application module organized by feature-first packages. Compose ViewModels consume repository flows; Room is the observable source of truth; the provider adapter, credential vault, WorkManager pipeline, and notification publisher remain isolated behind interfaces.
+**Architecture:** One Gradle application module organized by feature-first packages. Compose ViewModels consume repository flows; Room is the observable source of truth; the provider adapter, credential vault, WorkManager pipeline, and notification publisher remain isolated behind interfaces. A small application-scoped `AppContainer` performs manual constructor injection.
 
-**Tech Stack:** Kotlin, AGP 9.2.1, Gradle 9.4.1, JDK 17, compile/target SDK 37, min SDK 26, Compose BOM 2026.06.00, Material 3 1.4.0, Hilt 2.59.2, Room 2.8.4, DataStore 1.2.1, WorkManager 2.11.2, Lifecycle 2.11.0, Navigation Compose 2.9.8, Retrofit 3.0.0, OkHttp 5.3.0, Coroutines 1.11.0, KSP 2.3.9.
+**Tech Stack:** Kotlin 2.3.x, AGP 8.13.2, Gradle 8.14.3, existing JDK 17, compile/target SDK 36, min SDK 26, Compose BOM 2026.06.00, Material 3 1.4.0, Room 2.8.4, DataStore 1.2.1, WorkManager 2.11.2, Lifecycle 2.10.0, Navigation Compose 2.9.8, Retrofit 3.0.0, OkHttp 5.3.0, Coroutines 1.11.0, Kotlin serialization, and KSP 2.3.9 for Room only. Pin the latest stable Kotlin 2.3 patch that AGP 8.13.2 supports when Task 2 starts; do not add a library unless an implemented V1 feature needs it.
 
 ## Global Constraints
 
 - Create a new implementation under `E:\QuotaCheck\android-app`; do not reuse Tauri, Svelte, Rust, generated Android, or historical Kotlin implementation.
 - Use `E:\QuotaCheck\DESIGN.md` only for visual tokens and brand personality.
-- Keep Android SDK, Gradle cache, AVD images, build output, and Android temporary files on drive D or E.
-- Support Android 8.0/API 26 through target SDK 37.
+- Reuse `D:\Android\Sdk` and the existing C-drive JDK 17; keep new Gradle cache, build output, and Android temporary files on E.
+- Support Android 8.0/API 26 through target SDK 36.
+- Do not install Android Studio, emulator/AVD/system images, NDK, another JDK, standalone Gradle, API 37, or Build Tools 36.
+- Use manual constructor injection through `AppContainer`; do not add Hilt or Dagger.
+- Run device tests on a physical USB-debugging Android phone.
 - Use one account and pasted refresh-token onboarding in V1.
 - Keep Room as the only observable quota/history source of truth.
 - Default auto-sync interval is 30 minutes; default history retention is 90 days.
@@ -200,13 +203,14 @@ Do not scaffold the Android app beyond the fixture directories.
 - Create: `android-app/app/proguard-rules.pro`
 - Create: `android-app/app/src/main/AndroidManifest.xml`
 - Create: `android-app/app/src/main/java/com/quotacheck/app/QuotaCheckApp.kt`
+- Create: `android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt`
 - Create: `android-app/app/src/main/java/com/quotacheck/app/MainActivity.kt`
 - Create: `android-app/app/src/test/java/com/quotacheck/app/FoundationTest.kt`
 
 **Interfaces:**
 
 - Consumes: Task 1 `FEASIBLE`
-- Produces: package `com.quotacheck.app`, Hilt application, Compose activity, reproducible D/E-only Gradle wrapper
+- Produces: package `com.quotacheck.app`, manual dependency container, Compose activity, reproducible Gradle wrapper with all new large state on E
 
 - [ ] **Step 1: Write the storage verification test script**
 
@@ -217,16 +221,19 @@ $required = @(
   'ANDROID_HOME',
   'ANDROID_SDK_ROOT',
   'ANDROID_USER_HOME',
-  'ANDROID_AVD_HOME',
   'GRADLE_USER_HOME',
   'TEMP',
   'TMP'
 )
 foreach ($name in $required) {
   $value = [Environment]::GetEnvironmentVariable($name, 'Process')
-  if ([string]::IsNullOrWhiteSpace($value) -or $value -match '^[Cc]:\\') {
+  if ([string]::IsNullOrWhiteSpace($value) -or $value -notmatch '^[DdEe]:\\') {
     throw "$name must point to drive D or E, got '$value'"
   }
+}
+if ($env:JAVA_HOME -ne
+    'C:\Users\KK\AppData\Local\Programs\Eclipse Adoptium\jdk-17.0.15.6-hotspot') {
+  throw "JAVA_HOME must reuse the verified JDK 17"
 }
 ```
 
@@ -245,11 +252,11 @@ Expected: FAIL if the current process still resolves Android paths or temp to C.
 `android-env.ps1` sets:
 
 ```powershell
-$env:ANDROID_HOME = 'E:\Android\Sdk'
-$env:ANDROID_SDK_ROOT = 'E:\Android\Sdk'
+$env:ANDROID_HOME = 'D:\Android\Sdk'
+$env:ANDROID_SDK_ROOT = 'D:\Android\Sdk'
 $env:ANDROID_USER_HOME = 'E:\Android\.android'
-$env:ANDROID_AVD_HOME = 'E:\Android\avd'
 $env:GRADLE_USER_HOME = 'E:\Android\.gradle'
+$env:JAVA_HOME = 'C:\Users\KK\AppData\Local\Programs\Eclipse Adoptium\jdk-17.0.15.6-hotspot'
 $env:TEMP = 'E:\tmp\android'
 $env:TMP = 'E:\tmp\android'
 ```
@@ -260,24 +267,37 @@ $env:TMP = 'E:\tmp\android'
 
 - [ ] **Step 4: Create the version catalog**
 
-Pin only stable versions listed in this plan. Use Compose BOM `2026.06.00`,
-AGP `9.2.1`, Gradle `9.4.1`, Java 17, API 37, and min API 26. Configure KSP2,
-Hilt, Room, DataStore, WorkManager, Navigation Compose, Retrofit, OkHttp,
-Kotlin serialization, test libraries, and Compose UI tests.
+Use AGP `8.13.2`, Gradle `8.14.3`, Java 17, compile/target API 36, min API
+26, and Build Tools 35.0.0. Pin stable API-36-compatible versions of Compose,
+Material 3, Room, DataStore, WorkManager, Lifecycle, Navigation Compose,
+Retrofit, OkHttp, Coroutines, Kotlin serialization, and only the test
+libraries used by this plan. Configure KSP only for Room. Do not add Hilt,
+Dagger, an image loader, chart library, analytics, or crash reporting.
 
-- [ ] **Step 5: Install SDK packages and generate the Gradle wrapper on E**
+- [ ] **Step 5: Verify existing tools and generate the wrapper without downloads**
 
-Run after `android-env.ps1` has created its D/E directories:
+Verify that API 36, Build Tools 35.0.0, Platform Tools, command-line tools, and
+JDK 17 exist. Copy the already cached Gradle 8.14.3 archive from C to
+`E:\Android\bootstrap`; do not download another distribution or install SDK
+packages. Run after `android-env.ps1` has created its E-drive directories:
 
 ```powershell
 . .\scripts\android-env.ps1
-& 'E:\Android\Sdk\cmdline-tools\latest\bin\sdkmanager.bat' `
-  'platform-tools' 'platforms;android-37' 'build-tools;36.0.0'
-& 'E:\Android\bootstrap\gradle-9.4.1\bin\gradle.bat' `
-  -p 'E:\QuotaCheck\android-app' wrapper --gradle-version 9.4.1
+Test-Path 'D:\Android\Sdk\platforms\android-36\android.jar'
+Test-Path 'D:\Android\Sdk\build-tools\35.0.0'
+Test-Path "$env:JAVA_HOME\bin\java.exe"
+Copy-Item -LiteralPath `
+  'C:\Users\KK\.gradle\wrapper\dists\gradle-8.14.3-bin\cv11ve7ro1n3o1j4so8xd9n66\gradle-8.14.3-bin.zip' `
+  -Destination 'E:\Android\bootstrap\gradle-8.14.3-bin.zip'
+Expand-Archive -LiteralPath 'E:\Android\bootstrap\gradle-8.14.3-bin.zip' `
+  -DestinationPath 'E:\Android\bootstrap' -Force
+& 'E:\Android\bootstrap\gradle-8.14.3\bin\gradle.bat' `
+  -p 'E:\QuotaCheck\android-app' wrapper --gradle-version 8.14.3
 ```
 
-Expected: SDK packages, wrapper distribution, and caches exist only below E.
+Expected: no network download for the toolchain; the SDK remains on D, the
+existing JDK remains on C, and the copied Gradle distribution plus all new
+caches remain on E.
 
 - [ ] **Step 6: Write the failing foundation test**
 
@@ -289,10 +309,11 @@ class FoundationTest {
 }
 ```
 
-- [ ] **Step 7: Implement minimal Hilt Compose application**
+- [ ] **Step 7: Implement minimal Compose application with manual injection**
 
-Create `@HiltAndroidApp QuotaCheckApp`, `@AndroidEntryPoint MainActivity`, and a
-single `Text("QuotaCheck")` Compose surface. Manifest permissions are
+Create `QuotaCheckApp` with one lazily initialized `AppContainer`,
+`MainActivity`, and a single `Text("QuotaCheck")` Compose surface. Feature
+ViewModels receive dependencies through explicit factories. Manifest permissions are
 `INTERNET`, `ACCESS_NETWORK_STATE`, and `POST_NOTIFICATIONS`.
 
 - [ ] **Step 8: Run verification**
@@ -303,7 +324,9 @@ Run:
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 testDebugUnitTest lintDebug
 ```
 
-Expected: PASS; `verify-android-storage.ps1` reports every large path on D/E.
+Expected: PASS; `verify-android-storage.ps1` reports Android and all newly
+created large paths on D/E. The first app build may download only declared
+Maven dependencies to `E:\Android\.gradle`.
 
 - [ ] **Step 9: Commit**
 
@@ -315,9 +338,12 @@ git commit -m "build: scaffold native Android app on E drive"
 **Worker prompt:**
 
 ```text
-Implement Task 2 only using the pinned stable versions. All SDK, Gradle, AVD,
-TEMP, and build paths must remain on D/E. Run commands only through
-scripts/android-gradle.ps1. Do not implement product screens or network logic.
+Implement Task 2 only using the verified minimal toolchain. Do not install an
+IDE, emulator, AVD, system image, NDK, JDK, SDK platform, Build Tools, or
+standalone Gradle. Reuse the D-drive SDK and existing JDK 17, copy the cached
+Gradle archive to E, and keep all new caches/temp/build output on E. Use manual
+constructor injection. Run Gradle only through scripts/android-gradle.ps1. Do
+not implement product screens or network logic.
 ```
 
 ---
@@ -393,7 +419,7 @@ because minSdk 26. Do not add database or network annotations to domain models.
 - Create: `core/database/SyncDao.kt`
 - Create: `core/database/AlertDao.kt`
 - Create: `core/database/QuotaDatabase.kt`
-- Create: `core/database/DatabaseModule.kt`
+- Modify: `android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt`
 - Create: `android-app/app/src/androidTest/java/com/quotacheck/app/core/database/QuotaDatabaseTest.kt`
 
 **Interfaces:**
@@ -426,12 +452,13 @@ Expected: FAIL because database classes do not exist.
 Use UTC epoch milliseconds, `Double?` for optional absolute units, indices on
 `poolId`, `receivedAt`, `cycleEndAt`, and a unique index on `alertKey`.
 Database writes that feed alerts must run in one `withTransaction` block.
+Construct the singleton database and DAOs lazily in `AppContainer`.
 
 - [ ] **Step 4: Run tests and commit**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.quotacheck.app.core.database.QuotaDatabaseTest
-git add android-app/app/src/main/java/com/quotacheck/app/core/database android-app/app/src/androidTest/java/com/quotacheck/app/core/database
+git add android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt android-app/app/src/main/java/com/quotacheck/app/core/database android-app/app/src/androidTest/java/com/quotacheck/app/core/database
 git commit -m "feat: add offline quota database"
 ```
 
@@ -452,7 +479,7 @@ with in-memory Room tests before committing.
 - Create: `core/model/UserPreferences.kt`
 - Create: `core/preferences/UserPreferencesRepository.kt`
 - Create: `core/preferences/DataStoreUserPreferencesRepository.kt`
-- Create: `core/preferences/PreferencesModule.kt`
+- Modify: `android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt`
 - Create: `android-app/app/src/test/java/com/quotacheck/app/core/preferences/UserPreferencesRepositoryTest.kt`
 
 **Interfaces:**
@@ -470,12 +497,13 @@ reset/failure true, success false, Dark theme, 90 days.
 
 Allowed intervals are 30, 60, 120, and 240 minutes. Enforce critical threshold
 below low threshold and retention choices of 30, 90, or 180 days.
+Construct the repository lazily in `AppContainer`.
 
 - [ ] **Step 3: Run and commit**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 testDebugUnitTest --tests "*UserPreferencesRepositoryTest"
-git add android-app/app/src/main/java/com/quotacheck/app/core/preferences android-app/app/src/main/java/com/quotacheck/app/core/model/UserPreferences.kt android-app/app/src/test/java/com/quotacheck/app/core/preferences
+git add android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt android-app/app/src/main/java/com/quotacheck/app/core/preferences android-app/app/src/main/java/com/quotacheck/app/core/model/UserPreferences.kt android-app/app/src/test/java/com/quotacheck/app/core/preferences
 git commit -m "feat: persist user preferences"
 ```
 
@@ -494,7 +522,7 @@ Flow, validate every setter, and write deterministic defaults tests.
 
 - Create: `core/security/CredentialVault.kt`
 - Create: `core/security/AndroidCredentialVault.kt`
-- Create: `core/security/CredentialModule.kt`
+- Modify: `android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt`
 - Create: `main/res/xml/backup_rules.xml`
 - Create: `main/res/xml/data_extraction_rules.xml`
 - Create: `android-app/app/src/androidTest/java/com/quotacheck/app/core/security/AndroidCredentialVaultTest.kt`
@@ -520,13 +548,14 @@ rules exclude the ciphertext file.
 
 Use a non-exportable Android Keystore AES-256 key, random 12-byte IV per write,
 authenticated encryption, app-private storage, zero temporary character/byte
-arrays where practical, and no biometric requirement.
+arrays where practical, and no biometric requirement. Construct the vault
+lazily in `AppContainer`.
 
 - [ ] **Step 3: Run and commit**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.quotacheck.app.core.security.AndroidCredentialVaultTest
-git add android-app/app/src/main/java/com/quotacheck/app/core/security android-app/app/src/main/res/xml android-app/app/src/androidTest/java/com/quotacheck/app/core/security
+git add android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt android-app/app/src/main/java/com/quotacheck/app/core/security android-app/app/src/main/res/xml android-app/app/src/androidTest/java/com/quotacheck/app/core/security
 git commit -m "feat: secure refresh token with Android Keystore"
 ```
 
@@ -551,7 +580,7 @@ plaintext remains in storage.
 - Create: `core/network/RemoteError.kt`
 - Create: `core/network/QuotaRemoteDataSource.kt`
 - Create: `core/network/RetrofitQuotaRemoteDataSource.kt`
-- Create: `core/network/NetworkModule.kt`
+- Modify: `android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt`
 - Create: `android-app/app/src/test/java/com/quotacheck/app/core/network/PrivateQuotaContractTest.kt`
 
 **Interfaces:**
@@ -585,14 +614,15 @@ Expected: FAIL because adapter classes do not exist.
 Copy exact non-secret constants from Task 1 into `PrivateApiContract.kt`.
 Release base URL is a BuildConfig constant with no Settings override. Configure
 timeouts, Kotlin serialization with unknown-key tolerance, a redacting
-interceptor, and no body-level network logging.
+interceptor, and no body-level network logging. Wire Retrofit and the data
+source lazily in `AppContainer`.
 
 - [ ] **Step 4: Run secret scan, tests, and commit**
 
 ```powershell
 rg -n -i "bearer [a-z0-9._-]+|refresh_token\s*[:=]\s*[^\" ]+" android-app/app/src
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 testDebugUnitTest --tests "*PrivateQuotaContractTest"
-git add android-app/app/src/main/java/com/quotacheck/app/core/network android-app/app/src/test/java/com/quotacheck/app/core/network
+git add android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt android-app/app/src/main/java/com/quotacheck/app/core/network android-app/app/src/test/java/com/quotacheck/app/core/network
 git commit -m "feat: add private quota API adapter"
 ```
 
@@ -614,7 +644,7 @@ cleartext and trust-all TLS, and keep DTOs inside core/network.
 - Create: `core/model/SyncTrigger.kt`
 - Create: `core/model/SyncResult.kt`
 - Create: `core/repository/OfflineFirstQuotaRepository.kt`
-- Create: `core/repository/RepositoryModule.kt`
+- Modify: `android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt`
 - Create: `android-app/app/src/test/java/com/quotacheck/app/core/repository/OfflineFirstQuotaRepositoryTest.kt`
 
 **Interfaces:**
@@ -632,13 +662,13 @@ samples are skipped; retention follows preferences.
 - [ ] **Step 2: Implement minimal offline-first repository**
 
 The repository emits database flows only. Map all remote errors to sealed
-`SyncResult`; never expose Retrofit types.
+`SyncResult`; never expose Retrofit types. Wire it lazily in `AppContainer`.
 
 - [ ] **Step 3: Run and commit**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 testDebugUnitTest --tests "*OfflineFirstQuotaRepositoryTest"
-git add android-app/app/src/main/java/com/quotacheck/app/core/repository android-app/app/src/main/java/com/quotacheck/app/core/model/QuotaRepository.kt android-app/app/src/test/java/com/quotacheck/app/core/repository
+git add android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt android-app/app/src/main/java/com/quotacheck/app/core/repository android-app/app/src/main/java/com/quotacheck/app/core/model/QuotaRepository.kt android-app/app/src/test/java/com/quotacheck/app/core/repository
 git commit -m "feat: add offline-first quota repository"
 ```
 
@@ -658,7 +688,7 @@ cached data on remote failures and prove transaction/retention behavior.
 - Create: `sync/QuotaSyncWorker.kt`
 - Create: `sync/SyncScheduler.kt`
 - Create: `sync/WorkManagerSyncScheduler.kt`
-- Create: `sync/SyncModule.kt`
+- Modify: `android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt`
 - Create: `android-app/app/src/test/java/com/quotacheck/app/sync/QuotaSyncWorkerTest.kt`
 - Create: `android-app/app/src/test/java/com/quotacheck/app/sync/WorkManagerSyncSchedulerTest.kt`
 
@@ -677,12 +707,15 @@ unmetered constraints and 30/60/120/240-minute intervals.
 
 Use exponential backoff starting at 30 seconds. Periodic policy is UPDATE;
 manual work is unique KEEP. Do not use expedited or foreground execution.
+The worker obtains its repository from
+`(applicationContext as QuotaCheckApp).appContainer`; the scheduler is
+constructed lazily in that container.
 
 - [ ] **Step 3: Run and commit**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 testDebugUnitTest --tests "*QuotaSyncWorkerTest" --tests "*WorkManagerSyncSchedulerTest"
-git add android-app/app/src/main/java/com/quotacheck/app/sync android-app/app/src/test/java/com/quotacheck/app/sync
+git add android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt android-app/app/src/main/java/com/quotacheck/app/sync android-app/app/src/test/java/com/quotacheck/app/sync
 git commit -m "feat: schedule resilient quota synchronization"
 ```
 
@@ -705,7 +738,7 @@ work, polling, or custom boot receiver.
 - Create: `core/notifications/AndroidNotificationPublisher.kt`
 - Create: `core/notifications/NotificationChannels.kt`
 - Create: `core/notifications/NotificationActionReceiver.kt`
-- Create: `core/notifications/NotificationModule.kt`
+- Modify: `android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt`
 - Create: `android-app/app/src/test/java/com/quotacheck/app/core/notifications/AlertEvaluatorTest.kt`
 - Create: `android-app/app/src/androidTest/java/com/quotacheck/app/core/notifications/NotificationChannelTest.kt`
 
@@ -735,14 +768,16 @@ persisted delivery timestamp remains null.
 
 Create High `quota_alerts` and Default `sync_status`; call
 `setShowBadge(false)` on both. Use Private visibility plus generic public
-version, deep links, and Refresh action for failure.
+version, deep links, and Refresh action for failure. Wire the evaluator and
+publisher lazily in `AppContainer`; the receiver resolves its scheduler from
+the application container.
 
 - [ ] **Step 4: Run and commit**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 testDebugUnitTest --tests "*AlertEvaluatorTest"
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.quotacheck.app.core.notifications.NotificationChannelTest
-git add android-app/app/src/main/java/com/quotacheck/app/core/notifications android-app/app/src/test/java/com/quotacheck/app/core/notifications android-app/app/src/androidTest/java/com/quotacheck/app/core/notifications
+git add android-app/app/src/main/java/com/quotacheck/app/AppContainer.kt android-app/app/src/main/java/com/quotacheck/app/core/notifications android-app/app/src/test/java/com/quotacheck/app/core/notifications android-app/app/src/androidTest/java/com/quotacheck/app/core/notifications
 git commit -m "feat: deliver deduplicated quota notifications"
 ```
 
@@ -996,14 +1031,15 @@ inspection for forbidden permissions/components.
 
 - [ ] **Step 5: Create external signing material**
 
-Create `E:\Android\signing\quotacheck-release.jks` with
-`E:\Android\jdk\bin\keytool.exe`. Supply passwords interactively, then expose
+Create `E:\Android\signing\quotacheck-release.jks` with the verified existing
+`C:\Users\KK\AppData\Local\Programs\Eclipse Adoptium\jdk-17.0.15.6-hotspot\bin\keytool.exe`.
+Supply passwords interactively, then expose
 only process-scoped `QUOTACHECK_STORE_FILE`, `QUOTACHECK_STORE_PASSWORD`,
 `QUOTACHECK_KEY_ALIAS`, and `QUOTACHECK_KEY_PASSWORD` variables. Gradle must
 fail release assembly with a clear message when any variable is absent. Never
 write the passwords or keystore into the repository.
 
-- [ ] **Step 6: Run the complete gate**
+- [ ] **Step 6: Run the complete gate on the connected physical phone**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/android-gradle.ps1 clean testDebugUnitTest lintDebug connectedDebugAndroidTest assembleRelease
@@ -1023,9 +1059,11 @@ Verify:
 
 - [ ] **Step 8: Run local real-account smoke checklist**
 
-Never put the token in source or CI. Verify Android 8+, Android 13 permission,
-heads-up, restricted lock screen, shade, offline/reconnect, reboot scheduling,
-dark/light/system themes, and four-pool fit.
+Never put the token in source or CI. On the user's actual phone, verify
+notification permission, heads-up, restricted lock screen, shade,
+offline/reconnect, reboot scheduling, dark/light/system themes, and four-pool
+fit. API 26 compatibility is enforced by `minSdk`, lint, and automated tests;
+do not install an emulator merely to expand the device matrix.
 
 - [ ] **Step 9: Commit**
 
