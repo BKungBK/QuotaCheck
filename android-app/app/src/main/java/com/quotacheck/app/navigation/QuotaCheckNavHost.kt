@@ -18,6 +18,9 @@ import com.quotacheck.app.QuotaCheckApp
 import com.quotacheck.app.feature.home.HomeScreen
 import com.quotacheck.app.feature.home.HomeViewModel
 import com.quotacheck.app.feature.home.HomeViewModelFactory
+import com.quotacheck.app.feature.history.HistoryScreen
+import com.quotacheck.app.feature.history.HistoryViewModel
+import com.quotacheck.app.feature.history.HistoryViewModelFactory
 
 @Composable
 fun QuotaCheckNavHost(navController: NavHostController, modifier: Modifier = Modifier) {
@@ -28,7 +31,13 @@ fun QuotaCheckNavHost(navController: NavHostController, modifier: Modifier = Mod
             val state by viewModel.uiState.collectAsStateWithLifecycle()
             HomeScreen(state, viewModel::refresh)
         }
-        Destination.bottomNavigation.filterNot { it == Destination.Home }.forEach { destination -> composable(destination.route) { DestinationPlaceholder(destination.label) } }
+        composable(Destination.History.route) {
+            val container = (LocalContext.current.applicationContext as QuotaCheckApp).appContainer
+            val viewModel: HistoryViewModel = viewModel(factory = HistoryViewModelFactory(container.quotaRepository, container.historyDao))
+            val state by viewModel.uiState.collectAsStateWithLifecycle()
+            HistoryScreen(state, viewModel::selectPool, viewModel::selectPeriod)
+        }
+        Destination.bottomNavigation.filter { it != Destination.Home && it != Destination.History }.forEach { destination -> composable(destination.route) { DestinationPlaceholder(destination.label) } }
     }
 }
 
