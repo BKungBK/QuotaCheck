@@ -13,6 +13,20 @@ import com.quotacheck.app.core.preferences.DataStoreUserPreferencesRepository
 import com.quotacheck.app.core.preferences.UserPreferencesRepository
 import com.quotacheck.app.core.security.AndroidCredentialVault
 import com.quotacheck.app.core.security.CredentialVault
+import com.quotacheck.app.core.network.OAuthApi
+import com.quotacheck.app.core.network.PrivateApiContract
+import com.quotacheck.app.core.network.PrivateQuotaApi
+import com.quotacheck.app.core.network.QuotaRemoteDataSource
+import com.quotacheck.app.core.network.ResourceManagerApi
+import com.quotacheck.app.core.network.RedactingNetworkInterceptor
+import com.quotacheck.app.core.network.RetrofitQuotaRemoteDataSource
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import retrofit2.Retrofit
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.util.concurrent.TimeUnit
 
 /**
  * Application-scoped dependency root. Feature dependencies are added here as
@@ -39,4 +53,30 @@ class AppContainer(context: Context) {
     }
 
     val credentialVault: CredentialVault by lazy { AndroidCredentialVault(applicationContext) }
+
+    private val privateApiJson: Json by lazy { Json { ignoreUnknownKeys = true } }
+    private val privateApiClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
+            .addInterceptor(RedactingNetworkInterceptor())
+            .build()
+    }
+    private fun retrofit(baseUrl: String): Retrofit = Retrofit.Builder()
+        .baseUrl(baseUrl)
+        .client(privateApiClient)
+        .addConverterFactory(privateApiJson.asConverterFactory("application/json".toMediaType()))
+        .build()
+
+    val quotaRemoteDataSource: QuotaRemoteDataSource by lazy {
+        RetrofitQuotaRemoteDataSource(
+            oauthApi = retrofit(PrivateApiContract.OAUTH_BASE_URL).create(OAuthApi::class.java),
+            quotaApi = retrofit(PrivateApiContract.CLOUD_CODE_BASE_URL).create(PrivateQuotaApi::class.java),
+            resourceManagerApi = retrofit(PrivateApiContract.RESOURCE_MANAGER_BASE_URL).create(ResourceManagerApi::class.java),
+            oauthClientId = BuildConfig.OAUTH_CLIENT_ID,
+            oauthClientSecret = BuildConfig.OAUTH_CLIENT_SECRET,
+            cloudCodeBaseUrl = PrivateApiContract.CLOUD_CODE_BASE_URL.toHttpUrl(),
+        )
+    }
 }

@@ -1,9 +1,29 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+}
+
+val privateApiProperties = Properties().apply {
+    val file = rootProject.file("private-api.properties")
+    if (file.isFile) file.inputStream().use(::load)
+}
+
+val oauthClientId = privateApiProperties.getProperty("oauthClientId", "")
+val oauthClientSecret = privateApiProperties.getProperty("oauthClientSecret", "")
+
+tasks.configureEach {
+    if (name.contains("release", ignoreCase = true)) {
+        doFirst {
+            check(oauthClientId.isNotBlank() && oauthClientSecret.isNotBlank()) {
+                "Release builds require android-app/private-api.properties."
+            }
+        }
+    }
 }
 
 android {
@@ -23,6 +43,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "OAUTH_CLIENT_ID", "\"$oauthClientId\"")
+        buildConfigField("String", "OAUTH_CLIENT_SECRET", "\"$oauthClientSecret\"")
     }
 
     buildTypes {
@@ -71,6 +93,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit4)
+    testImplementation(libs.mockwebserver)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.junit4)
     androidTestRuntimeOnly(libs.androidx.test.runner)
