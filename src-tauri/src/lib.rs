@@ -54,7 +54,7 @@ async fn save_config(app_handle: AppHandle, state: State<'_, Arc<AppState>>, new
     let _ = toggle_autostart(new_config.autostart);
     #[cfg(target_os = "windows")]
     if let Some(window) = app_handle.get_webview_window("main") {
-        windows_layer::setup_with_retry(&window).await;
+        let _ = windows_layer::setup_with_retry(&window).await;
     }
     let _ = app_handle.emit("config-updated", new_config);
     trigger_refresh_internal(&app_handle, &state).await;
@@ -136,23 +136,48 @@ async fn check_has_loopback(client: &reqwest::Client) -> bool {
     result
 }
 
+fn pools_equal(a: &[config::QuotaPool], b: &[config::QuotaPool]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    for (p1, p2) in a.iter().zip(b.iter()) {
+        if p1.label != p2.label
+            || (p1.remaining_fraction - p2.remaining_fraction).abs() > f64::EPSILON
+            || p1.reset_time != p2.reset_time
+        {
+            return false;
+        }
+    }
+    true
+}
+
 async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx: mpsc::Receiver<()>) {
     let mut heavy_usage_until: Option<chrono::DateTime<chrono::Utc>> = None;
+    let mut prev_pools: Vec<config::QuotaPool> = Vec::new();
+    let mut consecutive_unchanged: usize = 0;
 
     loop {
         let config = config::load_config();
         let mut new_cache = config::load_cache();
 
-        match quota_client::fetch_quota(&state.client, &state.local_client, &config).await {
+        let fetch_success = match quota_client::fetch_quota(&state.client, &state.local_client, &config).await {
             Ok((pools, src, email_opt)) => {
+                if !pools.is_empty() && pools_equal(&prev_pools, &pools) {
+                    consecutive_unchanged += 1;
+                } else {
+                    consecutive_unchanged = 0;
+                }
+                prev_pools = pools.clone();
                 new_cache.pools = pools;
                 new_cache.is_offline = false;
                 new_cache.error_reason = None;
                 new_cache.source = src;
                 new_cache.account_email = email_opt;
                 new_cache.last_updated = chrono::Utc::now().to_rfc3339();
+                true
             }
             Err(err) => {
+                consecutive_unchanged = 0;
                 new_cache.is_offline = true;
                 if err.contains("not detected") || err.contains("not found") {
                     new_cache.error_reason = Some("process_not_found".to_string());
@@ -161,8 +186,9 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
                 }
                 new_cache.source = String::new();
                 new_cache.account_email = None;
+                false
             }
-        }
+        };
         let _ = config::save_cache(&new_cache);
 
         {
@@ -182,6 +208,8 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
             30
         } else if has_loopback {
             60
+        } else if fetch_success && consecutive_unchanged >= 1 {
+            600
         } else {
             300
         };
@@ -191,6 +219,7 @@ async fn start_polling_loop(app_handle: AppHandle, state: Arc<AppState>, mut rx:
             res = rx.recv() => {
                 if res.is_some() {
                     heavy_usage_until = Some(chrono::Utc::now() + chrono::Duration::minutes(5));
+                    consecutive_unchanged = 0;
                 } else {
                     break;
                 }
@@ -227,7 +256,8 @@ fn toggle_autostart(enable: bool) -> Result<(), String> {
 
         if enable {
             let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
-            let current_exe_w: Vec<u16> = current_exe.as_os_str().encode_wide().chain(Some(0)).collect();
+            let current_exe_quoted = format!("\"{}\"", current_exe.to_string_lossy());
+            let current_exe_w: Vec<u16> = std::ffi::OsStr::new(&current_exe_quoted).encode_wide().chain(Some(0)).collect();
             let _ = RegSetValueExW(
                 hkey,
                 windows::core::PCWSTR(name_w.as_ptr()),

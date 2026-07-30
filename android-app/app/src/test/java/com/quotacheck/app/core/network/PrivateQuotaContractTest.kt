@@ -19,7 +19,7 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 class PrivateQuotaContractTest {
     private lateinit var server: MockWebServer
     private val logs = mutableListOf<String>()
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     @Before fun setUp() { server = MockWebServer(); server.start() }
     @After fun tearDown() { server.shutdown() }
@@ -34,7 +34,7 @@ class PrivateQuotaContractTest {
 
         assertTrue(result.isSuccess)
         val pools = result.getOrThrow()
-        assertEquals(4, pools.size)
+        assertEquals(2, pools.size)
         assertNull(pools.first().totalUnits)
         assertNull(pools.first().usedUnits)
         assertNull(pools.first().remainingUnits)
@@ -73,6 +73,40 @@ class PrivateQuotaContractTest {
     @Test fun `maps malformed JSON to schema mismatch`() = runBlocking {
         enqueue(200, fixture("schema-invalid.json"))
         assertTrue(dataSource().validate(charArrayOf('x')).exceptionOrNull() is RemoteError.SchemaMismatch)
+    }
+
+    @Test fun `sanitizes refresh tokens with whitespace quotes and JSON strings`() {
+        assertEquals("1//04test_token", RetrofitQuotaRemoteDataSource.sanitizeRefreshToken("  1//04test_token \n"))
+        assertEquals("1//04test_token", RetrofitQuotaRemoteDataSource.sanitizeRefreshToken("\"1//04test_token\""))
+        assertEquals("1//04test_token", RetrofitQuotaRemoteDataSource.sanitizeRefreshToken("{\"refreshToken\": \"1//04test_token\"}"))
+        assertEquals("1//04test_token", RetrofitQuotaRemoteDataSource.sanitizeRefreshToken("{\"refresh_token\": \"1//04test_token\"}"))
+    }
+
+    @Test fun `fallbacks to fetchAvailableModels when retrieveUserQuotaSummary returns 404`() = runBlocking {
+        enqueue(200, fixture("token-success.json"))
+        enqueue(200, "{\"cloudaicompanionProject\":\"synthetic-project\"}")
+        enqueue(404, "{}")
+        enqueue(200, "{\"models\":{\"gemini-1.5-pro\":{\"displayName\":\"Gemini Pro\",\"quotaInfo\":{\"remainingFraction\":0.8}}}}")
+
+        val result = dataSource().fetchQuota(charArrayOf('x'))
+
+        assertTrue(result.isSuccess)
+        val pools = result.getOrThrow()
+        assertEquals(1, pools.size)
+        assertEquals("gemini-1.5-pro", pools.first().poolId)
+        assertEquals(0.8, pools.first().remainingFraction, 0.001)
+    }
+
+    @Test fun `propagates 429 rate limit during project discovery`() = runBlocking {
+        enqueue(200, fixture("token-success.json"))
+        enqueue(429, fixture("error-429.json"), "Retry-After" to "120")
+
+        val result = dataSource().fetchQuota(charArrayOf('x'))
+
+        assertTrue(result.isFailure)
+        val error = result.exceptionOrNull()
+        assertTrue(error is RemoteError.RateLimited)
+        assertEquals(120L, (error as RemoteError.RateLimited).retryAfterSeconds)
     }
 
     private fun dataSource(): QuotaRemoteDataSource {

@@ -10,7 +10,9 @@ internal class RedactingNetworkInterceptor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        emit("${request.method} ${request.url.encodedPath} ${response.code}")
+        val msg = "${request.method} ${request.url.encodedPath} HTTP ${response.code}"
+        android.util.Log.d("QuotaCheckNetwork", msg)
+        emit(msg)
         return response
     }
 }

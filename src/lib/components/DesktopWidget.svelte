@@ -97,6 +97,7 @@
       <span
         class="dot"
         class:dot-live={!s.isOffline && !s.isStale}
+        class:dot-animating={s.isVisible && !s.isOffline && !s.isStale}
         class:dot-stale={s.isStale}
         id="widget-status-dot"
         aria-hidden="true"
@@ -233,7 +234,8 @@
     flex-shrink: 0;
     will-change: opacity, box-shadow;
   }
-  .dot-live { background: var(--color-dot-live); animation: pulseDot 2.4s ease-in-out infinite; }
+  .dot-live { background: var(--color-dot-live); }
+  .dot-animating { animation: pulseDot 2.4s ease-in-out infinite; }
   .dot-stale { background: var(--color-dot-stale); }
 
   .pools-container {

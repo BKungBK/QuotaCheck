@@ -28,6 +28,8 @@ pub struct Config {
     pub quota_source_mode: String, // "auto", "local", "cloud"
     #[serde(default = "default_display_mode")]
     pub display_mode: String, // "summary", "detailed"
+    #[serde(default)]
+    pub debug_logging: bool,
 }
 
 impl Default for Config {
@@ -45,6 +47,7 @@ impl Default for Config {
             mask_account_email: false,
             quota_source_mode: "auto".to_string(),
             display_mode: "summary".to_string(),
+            debug_logging: false,
         }
     }
 }

@@ -11,4 +11,7 @@ object PrivateApiContract {
 
     const val USER_AGENT = "antigravity/1.104.0 windows/amd64"
     const val CLIENT_METADATA = "{\"ideType\":\"ANTIGRAVITY\",\"platform\":\"WINDOWS\",\"pluginType\":\"GEMINI\"}"
+
+    const val DEFAULT_OAUTH_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+    const val DEFAULT_OAUTH_CLIENT_SECRET = "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"
 }

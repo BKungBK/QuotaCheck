@@ -1,17 +1,18 @@
 <script lang="ts">
+  import { quotaStore } from '$lib/quota-store.svelte';
   let { short = false }: { short?: boolean } = $props();
 </script>
 
 <div class="pool-row skeleton">
   <div class="pool-meta">
-    <div class="skeleton-text name" class:name--short={short}></div>
-    <div class="skeleton-text percent"></div>
+    <div class="skeleton-text name" class:animating={quotaStore.isVisible} class:name--short={short}></div>
+    <div class="skeleton-text percent" class:animating={quotaStore.isVisible}></div>
   </div>
   <div class="bar-track">
-    <div class="bar-fill skeleton-bar"></div>
+    <div class="bar-fill skeleton-bar" class:animating={quotaStore.isVisible}></div>
   </div>
   <div class="sub-row">
-    <div class="skeleton-text sub" class:sub--short={short}></div>
+    <div class="skeleton-text sub" class:animating={quotaStore.isVisible} class:sub--short={short}></div>
   </div>
 </div>
 
@@ -56,7 +57,6 @@
       var(--color-shimmer-base) 63%
     );
     background-size: 400% 100%;
-    animation: shimmer 1.4s linear infinite;
   }
 
   .skeleton-bar {
@@ -69,6 +69,10 @@
       var(--color-shimmer-base) 63%
     );
     background-size: 400% 100%;
+  }
+
+  .skeleton-text.animating,
+  .skeleton-bar.animating {
     animation: shimmer 1.4s linear infinite;
   }
 

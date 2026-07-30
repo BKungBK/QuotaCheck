@@ -7,6 +7,8 @@ import com.quotacheck.app.core.model.QuotaRepository
 import com.quotacheck.app.core.model.SyncResult
 import com.quotacheck.app.core.model.SyncTrigger
 import com.quotacheck.app.core.network.QuotaRemoteDataSource
+import com.quotacheck.app.core.network.RemoteError
+import com.quotacheck.app.core.network.RetrofitQuotaRemoteDataSource
 import com.quotacheck.app.core.preferences.UserPreferencesRepository
 import com.quotacheck.app.core.security.CredentialVault
 import com.quotacheck.app.sync.SyncScheduler
@@ -49,32 +51,61 @@ class OnboardingViewModel(
             mutableUiState.value = OnboardingUiState.TokenRequired
             return
         }
+        // Sanitize once here. RetrofitQuotaRemoteDataSource.exchangeToken() previously
+        // also called sanitizeRefreshToken() — that second sanitize has been removed there
+        // to avoid double processing.
+        val cleanedToken = RetrofitQuotaRemoteDataSource.sanitizeRefreshToken(token.concatToString()).toCharArray()
+        if (cleanedToken.isEmpty()) {
+            mutableUiState.value = OnboardingUiState.TokenRequired
+            return
+        }
         var persisted = false
         try {
             mutableUiState.value = OnboardingUiState.Validating
-            if (remote.validate(token).isFailure) {
-                mutableUiState.value = OnboardingUiState.ValidationFailed
+            val valRes = remote.validate(cleanedToken)
+            if (valRes.isFailure) {
+                val error = valRes.exceptionOrNull()
+                android.util.Log.e("QuotaCheckVM", "Validate failed (${error?.javaClass?.simpleName}): $error", error)
+                mutableUiState.value = when (error) {
+                    is RemoteError.AuthRequired ->
+                        // OAuth explicitly rejected the token (HTTP 401/403).
+                        OnboardingUiState.ValidationFailed
+                    is RemoteError.RateLimited ->
+                        OnboardingUiState.RateLimited
+                    else ->
+                        // IOException/timeout/DNS/SchemaMismatch/NonRetryable — token may be fine.
+                        OnboardingUiState.NetworkError
+                }
                 return
             }
-            vault.saveRefreshToken(token)
+            vault.saveRefreshToken(cleanedToken)
             persisted = true
             mutableUiState.value = OnboardingUiState.InitialSyncing
-            if (repository.synchronize(SyncTrigger.ONBOARDING) !is SyncResult.Success) {
-                clearPersistedToken()
-                mutableUiState.value = OnboardingUiState.InitialSyncFailed
-                return
+            val syncResult = repository.synchronize(SyncTrigger.ONBOARDING)
+            android.util.Log.d("QuotaCheckVM", "Sync result: $syncResult")
+            if (syncResult !is SyncResult.Success) {
+                if (syncResult is SyncResult.AuthRequired) {
+                    clearPersistedToken()
+                    mutableUiState.value = OnboardingUiState.ValidationFailed
+                    return
+                }
             }
             preferences.setOnboardingCompleted(true)
-            preferences.preferences.first().takeIf { it.autoSyncEnabled }?.let(scheduler::ensurePeriodic)
+            runCatching {
+                preferences.preferences.first().takeIf { it.autoSyncEnabled }?.let(scheduler::ensurePeriodic)
+            }
             mutableUiState.value = OnboardingUiState.Connected
         } catch (error: CancellationException) {
+            android.util.Log.e("QuotaCheckVM", "CancellationException", error)
             mutableUiState.value = OnboardingUiState.InitialSyncFailed
             if (persisted) clearPersistedToken()
             throw error
-        } catch (_: Throwable) {
+        } catch (error: Throwable) {
+            android.util.Log.e("QuotaCheckVM", "Throwable exception: ${error.message}", error)
             if (persisted) clearPersistedToken()
             mutableUiState.value = OnboardingUiState.InitialSyncFailed
         } finally {
+            cleanedToken.fill('\u0000')
             token.fill('\u0000')
         }
     }

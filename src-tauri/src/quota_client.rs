@@ -202,21 +202,44 @@ struct BackendQuotaPool {
     reset_time: Option<String>,
 }
 
-// ─── Debug logging helper ────────────────────────────────────────────────────
+// ─── Debug logging & endpoint caching helper ────────────────────────────────
+
+static DEBUG_LOGGING_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_debug_logging_enabled(enabled: bool) {
+    DEBUG_LOGGING_ENABLED.store(enabled, std::sync::atomic::Ordering::Relaxed);
+}
 
 fn append_debug_log(msg: &str) {
+    if !DEBUG_LOGGING_ENABLED.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
     use std::fs::OpenOptions;
     use std::io::Write;
-    use std::thread::sleep;
-    use std::time::Duration;
     let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
-    for _ in 0..10 {
-        if let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&log_path) {
-            let _ = writeln!(f, "{}", msg);
-            return;
+    if let Ok(meta) = std::fs::metadata(&log_path) {
+        if meta.len() > 2 * 1024 * 1024 {
+            let _ = OpenOptions::new().write(true).truncate(true).open(&log_path);
         }
-        sleep(Duration::from_millis(10));
     }
+    if let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&log_path) {
+        let _ = writeln!(f, "[{}] {}", chrono::Utc::now().to_rfc3339(), msg);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct CachedEndpoint {
+    pid: u32,
+    csrf_token: String,
+    extension_server_csrf_token: Option<String>,
+    scheme: String,
+    port: u16,
+    last_verified: std::time::Instant,
+}
+
+fn get_endpoint_cache() -> &'static Mutex<Option<CachedEndpoint>> {
+    static CACHE: OnceLock<Mutex<Option<CachedEndpoint>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(None))
 }
 
 // ─── Process detection ───────────────────────────────────────────────────────
@@ -252,9 +275,7 @@ async fn detect_antigravity_process() -> Option<ProcessInfo> {
         return None;
     }
 
-    // Reset debug log with WMI results
-    let log_path = std::env::temp_dir().join("antigravity_quota_widget_debug.log");
-    let _ = fs::write(&log_path, format!("WMI result:\n{}\n", json_str));
+    append_debug_log(&format!("WMI result:\n{}", json_str));
 
     let processes: Vec<WmiProcess> = if json_str.starts_with('[') {
         serde_json::from_str(json_str).ok()?
@@ -569,15 +590,14 @@ fn parse_summary_pools(parsed: &RetrieveUserQuotaSummaryResponse, display_mode: 
 
 // ─── Local language server quota fetch ───────────────────────────────────────
 
-async fn fetch_local_language_server_quota(local_client: &reqwest::Client, display_mode: &str) -> Result<(Vec<super::config::QuotaPool>, String), String> {
-    append_debug_log("--- fetch_local_language_server_quota start ---");
-
-    let info = detect_antigravity_process().await
-        .ok_or_else(|| "Antigravity process not detected".to_string())?;
-
-    let (scheme, port) = find_api_endpoint(local_client, &info).await
-        .ok_or_else(|| "Could not find Antigravity local API port".to_string())?;
-
+async fn query_endpoint_with_info(
+    local_client: &reqwest::Client,
+    scheme: &str,
+    port: u16,
+    csrf_token: &str,
+    extension_server_csrf_token: Option<&str>,
+    display_mode: &str,
+) -> Result<Vec<super::config::QuotaPool>, String> {
     let base_url = format!("{}://127.0.0.1:{}/exa.language_server_pb.LanguageServerService", scheme, port);
 
     let meta = serde_json::json!({
@@ -594,7 +614,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
 
     append_debug_log(&format!("Calling RetrieveUserQuotaSummary at {}", base_url));
 
-    let res_summary = if let Some(ref ext_csrf) = info.extension_server_csrf_token {
+    let res_summary = if let Some(ext_csrf) = extension_server_csrf_token {
         let r = local_client.post(&format!("{}/RetrieveUserQuotaSummary", base_url))
             .header("Connect-Protocol-Version", "1")
             .header("X-Codeium-Csrf-Token", ext_csrf)
@@ -607,7 +627,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
                 append_debug_log("Extension CSRF failed for RetrieveUserQuotaSummary, retrying with main CSRF");
                 local_client.post(&format!("{}/RetrieveUserQuotaSummary", base_url))
                     .header("Connect-Protocol-Version", "1")
-                    .header("X-Codeium-Csrf-Token", &info.csrf_token)
+                    .header("X-Codeium-Csrf-Token", csrf_token)
                     .json(&meta)
                     .send()
                     .await
@@ -616,7 +636,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
     } else {
         local_client.post(&format!("{}/RetrieveUserQuotaSummary", base_url))
             .header("Connect-Protocol-Version", "1")
-            .header("X-Codeium-Csrf-Token", &info.csrf_token)
+            .header("X-Codeium-Csrf-Token", csrf_token)
             .json(&meta)
             .send()
             .await
@@ -644,13 +664,13 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
     }
 
     if retrieve_summary_success {
-        return Ok((pools_result, "local".to_string()));
+        return Ok(pools_result);
     }
 
     // Fallback: query GetUserStatus and merge manually
     append_debug_log("Falling back to GetUserStatus with manual merging");
     
-    let res_status = if let Some(ref ext_csrf) = info.extension_server_csrf_token {
+    let res_status = if let Some(ext_csrf) = extension_server_csrf_token {
         let r = local_client.post(&format!("{}/GetUserStatus", base_url))
             .header("Connect-Protocol-Version", "1")
             .header("X-Codeium-Csrf-Token", ext_csrf)
@@ -663,7 +683,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
                 append_debug_log("Extension CSRF failed or rejected, retrying with main CSRF");
                 local_client.post(&format!("{}/GetUserStatus", base_url))
                     .header("Connect-Protocol-Version", "1")
-                    .header("X-Codeium-Csrf-Token", &info.csrf_token)
+                    .header("X-Codeium-Csrf-Token", csrf_token)
                     .json(&meta)
                     .send()
                     .await
@@ -672,7 +692,7 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
     } else {
         local_client.post(&format!("{}/GetUserStatus", base_url))
             .header("Connect-Protocol-Version", "1")
-            .header("X-Codeium-Csrf-Token", &info.csrf_token)
+            .header("X-Codeium-Csrf-Token", csrf_token)
             .json(&meta)
             .send()
             .await
@@ -758,7 +778,58 @@ async fn fetch_local_language_server_quota(local_client: &reqwest::Client, displ
         return Err("No matching models found in manual fallback".to_string());
     }
 
-    Ok((fallback_pools, "local".to_string()))
+    Ok(fallback_pools)
+}
+
+async fn fetch_local_language_server_quota(local_client: &reqwest::Client, display_mode: &str) -> Result<(Vec<super::config::QuotaPool>, String), String> {
+    append_debug_log("--- fetch_local_language_server_quota start ---");
+
+    // 1. Check cached endpoint first
+    let cached_opt = {
+        let cache = get_endpoint_cache().lock().await;
+        cache.clone()
+    };
+
+    if let Some(cached) = cached_opt {
+        append_debug_log(&format!("Using cached endpoint {}://127.0.0.1:{} (PID {})", cached.scheme, cached.port, cached.pid));
+        match query_endpoint_with_info(local_client, &cached.scheme, cached.port, &cached.csrf_token, cached.extension_server_csrf_token.as_deref(), display_mode).await {
+            Ok(pools) => {
+                let mut cache = get_endpoint_cache().lock().await;
+                if let Some(ref mut c) = *cache {
+                    c.last_verified = std::time::Instant::now();
+                }
+                return Ok((pools, "local".to_string()));
+            }
+            Err(e) => {
+                append_debug_log(&format!("Cached endpoint request failed: {}. Clearing cache and re-detecting process.", e));
+                let mut cache = get_endpoint_cache().lock().await;
+                *cache = None;
+            }
+        }
+    }
+
+    // 2. Full process detection & port discovery when no cache or cache failed
+    let info = detect_antigravity_process().await
+        .ok_or_else(|| "Antigravity process not detected".to_string())?;
+
+    let (scheme, port) = find_api_endpoint(local_client, &info).await
+        .ok_or_else(|| "Could not find Antigravity local API port".to_string())?;
+
+    // 3. Update cache with verified working endpoint
+    {
+        let mut cache = get_endpoint_cache().lock().await;
+        *cache = Some(CachedEndpoint {
+            pid: info.pid,
+            csrf_token: info.csrf_token.clone(),
+            extension_server_csrf_token: info.extension_server_csrf_token.clone(),
+            scheme: scheme.clone(),
+            port,
+            last_verified: std::time::Instant::now(),
+        });
+    }
+
+    let pools = query_endpoint_with_info(local_client, &scheme, port, &info.csrf_token, info.extension_server_csrf_token.as_deref(), display_mode).await?;
+    Ok((pools, "local".to_string()))
 }
 
 // ─── Token retrieval for cloud fallback ──────────────────────────────────────
@@ -858,6 +929,7 @@ fn get_cached_antigravity_token(custom_path: &str) -> Option<CockpitAccount> {
 // ─── Main fetch_quota ────────────────────────────────────────────────────────
 
 pub async fn fetch_quota(client: &reqwest::Client, local_client: &reqwest::Client, config: &super::config::Config) -> Result<(Vec<super::config::QuotaPool>, String, Option<String>), String> {
+    set_debug_logging_enabled(config.debug_logging);
     let mode = config.quota_source_mode.to_lowercase();
     append_debug_log(&format!("fetch_quota called with quota_source_mode='{}'", mode));
 

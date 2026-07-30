@@ -68,7 +68,18 @@ fun OnboardingScreen(
             OnboardingUiState.Validating -> Text("Validating token...")
             OnboardingUiState.InitialSyncing -> Text("Getting your quota...")
             OnboardingUiState.TokenRequired -> Text("Enter a refresh token to continue.")
-            OnboardingUiState.ValidationFailed -> Text("That token could not be validated. Check it and try again.")
+            OnboardingUiState.ValidationFailed -> Text(
+                "Token is expired, revoked, or invalid. Please check and paste an active refresh token.",
+                color = MaterialTheme.colorScheme.error,
+            )
+            OnboardingUiState.NetworkError -> Text(
+                "Could not reach Google's servers. Check your internet connection and try again.",
+                color = MaterialTheme.colorScheme.error,
+            )
+            OnboardingUiState.RateLimited -> Text(
+                "Too many requests. Please wait a moment and try again.",
+                color = MaterialTheme.colorScheme.error,
+            )
             OnboardingUiState.InitialSyncFailed -> Text("Quota could not be loaded. The token was not kept.")
             OnboardingUiState.Loading -> CircularProgressIndicator()
             else -> Unit

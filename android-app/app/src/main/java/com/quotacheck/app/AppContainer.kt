@@ -63,7 +63,7 @@ class AppContainer(context: Context) {
 
     val credentialVault: CredentialVault by lazy { AndroidCredentialVault(applicationContext) }
 
-    private val privateApiJson: Json by lazy { Json { ignoreUnknownKeys = true } }
+    private val privateApiJson: Json by lazy { Json { ignoreUnknownKeys = true; explicitNulls = false } }
     private val privateApiClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)
@@ -83,8 +83,8 @@ class AppContainer(context: Context) {
             oauthApi = retrofit(PrivateApiContract.OAUTH_BASE_URL).create(OAuthApi::class.java),
             quotaApi = retrofit(PrivateApiContract.CLOUD_CODE_BASE_URL).create(PrivateQuotaApi::class.java),
             resourceManagerApi = retrofit(PrivateApiContract.RESOURCE_MANAGER_BASE_URL).create(ResourceManagerApi::class.java),
-            oauthClientId = BuildConfig.OAUTH_CLIENT_ID,
-            oauthClientSecret = BuildConfig.OAUTH_CLIENT_SECRET,
+            oauthClientId = BuildConfig.OAUTH_CLIENT_ID.ifBlank { PrivateApiContract.DEFAULT_OAUTH_CLIENT_ID },
+            oauthClientSecret = BuildConfig.OAUTH_CLIENT_SECRET.ifBlank { PrivateApiContract.DEFAULT_OAUTH_CLIENT_SECRET },
             cloudCodeBaseUrl = PrivateApiContract.CLOUD_CODE_BASE_URL.toHttpUrl(),
         )
     }

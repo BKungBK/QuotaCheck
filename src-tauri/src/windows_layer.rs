@@ -150,7 +150,9 @@ unsafe extern "system" fn wallpaper_wndproc(
     CallWindowProcW(prev_proc, hwnd, msg, wparam, lparam)
 }
 
-pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
+static UNCHANGED_CHECKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<bool, String> {
     unsafe {
         let tauri_hwnd = window.hwnd().map_err(|e| e.to_string())?;
 
@@ -260,8 +262,10 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
         let current_h = current_rect.bottom - current_rect.top;
         let pos_changed = current_rect.left != x || current_rect.top != y || current_w != widget_w || current_h != widget_h;
 
+        let changed = parent_changed || style_changed || ex_style_changed || pos_changed;
+
         // Position, resize, and trigger frame changed update ONLY when something actually changed
-        if parent_changed || style_changed || ex_style_changed || pos_changed {
+        if changed {
             let _ = SetWindowPos(
                 tauri_hwnd,
                 None,
@@ -273,11 +277,11 @@ pub fn setup_wallpaper_widget(window: &WebviewWindow) -> Result<(), String> {
             );
         }
 
-        Ok(())
+        Ok(changed)
     }
 }
 
-pub async fn setup_with_retry(window: &WebviewWindow) {
+pub async fn setup_with_retry(window: &WebviewWindow) -> Result<bool, String> {
     let mut attempt = 0u32;
     loop {
         attempt += 1;
@@ -298,11 +302,11 @@ pub async fn setup_with_retry(window: &WebviewWindow) {
         };
 
         match setup_res {
-            Ok(_) => {
+            Ok(changed) => {
                 if attempt > 1 {
                     eprintln!("setup_wallpaper_widget succeeded on attempt {}", attempt);
                 }
-                break;
+                return Ok(changed);
             }
             Err(e) => {
                 eprintln!("setup attempt {} failed: {}", attempt, e);
@@ -324,7 +328,7 @@ pub fn init_wallpaper_widget(window: WebviewWindow) {
     let window_clone = window.clone();
     tauri::async_runtime::spawn(async move {
         // Initial setup with retry (Win32 calls marshaled to main thread)
-        setup_with_retry(&window_clone).await;
+        let _ = setup_with_retry(&window_clone).await;
 
         // Subclass window procedure for display change events on main thread
         let window_subclass = window_clone.clone();
@@ -351,18 +355,29 @@ pub fn init_wallpaper_widget(window: WebviewWindow) {
                 let _ = tx_watchdog.try_send(());
             }
 
-            // Normal phase: 20s interval
-            let mut tick = tokio::time::interval(std::time::Duration::from_secs(20));
+            // Normal phase: 60s base interval, backing off to 120s after 3 consecutive unchanged checks
+            let mut interval_secs = 60u64;
             loop {
-                tick.tick().await;
+                tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
                 let _ = tx_watchdog.try_send(());
+                if UNCHANGED_CHECKS.load(std::sync::atomic::Ordering::Relaxed) >= 3 {
+                    interval_secs = 120;
+                } else {
+                    interval_secs = 60;
+                }
             }
         });
 
         // Debounced event handler loop
         while let Some(_) = rx.recv().await {
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-            setup_with_retry(&window_clone).await;
+            if let Ok(changed) = setup_with_retry(&window_clone).await {
+                if changed {
+                    UNCHANGED_CHECKS.store(0, std::sync::atomic::Ordering::Relaxed);
+                } else {
+                    UNCHANGED_CHECKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
         }
     });
 }

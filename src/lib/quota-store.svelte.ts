@@ -21,13 +21,53 @@ class QuotaStore {
   tokenSaveStatus = $state('');
 
   now = $state(Date.now());
+  isVisible = $state(typeof document !== 'undefined' ? !document.hidden : true);
 
   constructor() {
     $effect.root(() => {
-      const interval = setInterval(() => {
-        this.now = Date.now();
-      }, 5000);
-      return () => clearInterval(interval);
+      let interval: ReturnType<typeof setInterval> | null = null;
+
+      const startTimer = () => {
+        if (!interval) {
+          interval = setInterval(() => {
+            this.now = Date.now();
+          }, 5000);
+        }
+      };
+
+      const stopTimer = () => {
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+      };
+
+      const handleVisibilityChange = () => {
+        if (typeof document !== 'undefined') {
+          const hidden = document.hidden;
+          this.isVisible = !hidden;
+          if (hidden) {
+            stopTimer();
+          } else {
+            this.now = Date.now();
+            startTimer();
+          }
+        }
+      };
+
+      if (typeof document !== 'undefined') {
+        if (!document.hidden) {
+          startTimer();
+        }
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+      }
+
+      return () => {
+        stopTimer();
+        if (typeof document !== 'undefined') {
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+        }
+      };
     });
   }
 

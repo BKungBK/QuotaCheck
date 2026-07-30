@@ -53,15 +53,18 @@ class WorkManagerSyncScheduler(private val workManager: WorkManagerGateway) : Sy
         enqueuePeriodic(preferences, ExistingPeriodicWorkPolicy.KEEP)
 
     private fun enqueuePeriodic(preferences: UserPreferences, policy: ExistingPeriodicWorkPolicy) {
-        val request = PeriodicWorkRequestBuilder<QuotaSyncWorker>(
-            preferences.syncIntervalMinutes.toLong(),
-            TimeUnit.MINUTES,
-        )
-            .setConstraints(networkConstraints(preferences.wifiOnly))
-            .setInputData(triggerData(SyncTrigger.PERIODIC))
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
-            .build()
-        workManager.enqueueUniquePeriodicWork(PERIODIC_WORK_NAME, policy, request)
+        runCatching {
+            val intervalMinutes = preferences.syncIntervalMinutes.toLong().coerceAtLeast(15L)
+            val request = PeriodicWorkRequestBuilder<QuotaSyncWorker>(
+                intervalMinutes,
+                TimeUnit.MINUTES,
+            )
+                .setConstraints(networkConstraints(preferences.wifiOnly))
+                .setInputData(triggerData(SyncTrigger.PERIODIC))
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
+                .build()
+            workManager.enqueueUniquePeriodicWork(PERIODIC_WORK_NAME, policy, request)
+        }
     }
 
     override fun cancelPeriodic() = workManager.cancelUniqueWork(PERIODIC_WORK_NAME)
