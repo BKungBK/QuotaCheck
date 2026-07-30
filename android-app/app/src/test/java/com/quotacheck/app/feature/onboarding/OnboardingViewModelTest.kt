@@ -30,7 +30,7 @@ class OnboardingViewModelTest {
     }
 
     @Test fun validationFailureDoesNotPersistToken() = runBlocking {
-        val vault = FakeVault(); val remote = FakeRemote(Result.failure(IllegalArgumentException()))
+        val vault = FakeVault(); val remote = FakeRemote(Result.failure(com.quotacheck.app.core.network.RemoteError.AuthRequired))
         val viewModel = newViewModel(vault, remote, FakeRepository())
         viewModel.submitTokenNow("secret".toCharArray())
         assertEquals(OnboardingUiState.ValidationFailed, viewModel.uiState.value); assertFalse(vault.saved)
@@ -46,7 +46,7 @@ class OnboardingViewModelTest {
     }
 
     @Test fun failedInitialSyncRollsBackSavedToken() = runBlocking {
-        val vault = FakeVault(); val viewModel = newViewModel(vault, FakeRemote(), FakeRepository(SyncResult.AuthRequired))
+        val vault = FakeVault(); val viewModel = newViewModel(vault, FakeRemote(), FakeRepository(SyncResult.Failed(com.quotacheck.app.core.model.FailureCategory.RETRYABLE)))
         viewModel.submitTokenNow("secret".toCharArray())
         assertTrue(vault.cleared); assertEquals(OnboardingUiState.InitialSyncFailed, viewModel.uiState.value)
     }

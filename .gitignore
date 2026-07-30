@@ -12,3 +12,11 @@ debug_log.txt
 /src-tauri/target
 /src-tauri/target_temp
 .impeccable
+.gradle-build-cache/
+.tmp/
+*.log
+*.patch
+release-log.txt
+run_instrumented.ps1
+timing-logs/
+/src-tauri/webview2-download/

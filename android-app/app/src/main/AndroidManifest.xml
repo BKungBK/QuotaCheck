@@ -25,5 +25,16 @@
         <receiver
             android:name=".core.notifications.NotificationActionReceiver"
             android:exported="false" />
+        <receiver
+            android:name=".widget.QuotaWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quota_widget_info" />
+        </receiver>
     </application>
 </manifest>

@@ -1,0 +1,60 @@
+<style>
+  .phones{display:grid;grid-template-columns:repeat(2,minmax(280px,350px));justify-content:center;gap:26px;margin-top:22px}
+  .phone{background:#171717;border:1px solid #3a3a3a;border-radius:30px;padding:16px 15px 13px;color:#e8e8e8;min-height:560px}
+  .status,.top,.row,.nav{display:flex;align-items:center;justify-content:space-between}.status{font-size:10px;color:#888;margin:0 4px 18px}.top{margin-bottom:14px}.brand{font-size:12px;font-weight:700;letter-spacing:.06em}
+  .section-title{font-size:9px;color:#9c9c9c;text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin:14px 3px 7px}
+  .card{background:#202020;border:1px solid #383838;border-radius:12px;padding:3px 14px;margin-bottom:10px}.row{padding:12px 0;border-bottom:1px solid #303030}.row:last-child{border-bottom:0}
+  .copy{font-size:11px}.copy small{display:block;color:#858585;font-size:9px;margin-top:4px;max-width:205px}.value{font-size:10px;color:#bcbcbc}
+  .toggle{width:32px;height:18px;border-radius:10px;background:#575757;padding:2px}.toggle:after{content:"";display:block;width:14px;height:14px;border-radius:50%;background:#ddd;margin-left:14px}.toggle.off{background:#343434}.toggle.off:after{margin-left:0;background:#777}
+  .slider{height:4px;border-radius:3px;background:#3a3a3a;margin:2px 0 12px}.slider i{display:block;height:100%;width:80%;background:#777;position:relative}.slider i:after{content:"";position:absolute;right:-6px;top:-4px;width:12px;height:12px;border-radius:50%;background:#aaa}
+  .warning{color:#c9a25c}.danger{color:#d19a9a}.button{display:block;border:1px solid #454545;border-radius:9px;text-align:center;padding:10px;font-size:10px;color:#d2d2d2;margin:9px 0}
+  .nav{margin-top:22px;border-top:1px solid #303030;padding:12px 4px 3px;color:#747474;font-size:9px}.nav .active{color:#e0e0e0}
+  .approval{max-width:740px;margin:20px auto 0;background:#202020;border:1px solid #383838;border-radius:12px;padding:14px;color:#aaa;font-size:13px}
+  @media(max-width:750px){.phones{grid-template-columns:1fr}}
+</style>
+
+<h2>Alerts + Settings</h2>
+<p class="subtitle">แจ้งเตือนตั้งง่าย ส่วน system-level behavior ส่งต่อไป Android settings</p>
+<div class="phones">
+  <div class="phone">
+    <div class="status"><span>09:41</span><span>5G&nbsp;&nbsp;87%</span></div>
+    <div class="top"><span class="brand">ALERTS</span><span class="value">Enabled</span></div>
+    <div class="section-title">Quota alerts</div>
+    <div class="card">
+      <div class="row"><div class="copy">Low quota<small>Notify when any pool falls below threshold</small></div><div class="toggle"></div></div>
+      <div class="row"><div class="copy">Threshold<small>Remaining quota</small></div><strong class="warning">20%</strong></div>
+      <div class="slider"><i></i></div>
+      <div class="row"><div class="copy">Critical quota<small>One additional alert at 10% remaining</small></div><div class="toggle"></div></div>
+      <div class="row"><div class="copy">Billing reset<small>Notify after a cycle resets</small></div><div class="toggle"></div></div>
+    </div>
+    <div class="section-title">Sync alerts</div>
+    <div class="card">
+      <div class="row"><div class="copy">Sync failed<small>Only after 3 consecutive failures</small></div><div class="toggle"></div></div>
+      <div class="row"><div class="copy">Sync succeeded<small>Off by default to reduce noise</small></div><div class="toggle off"></div></div>
+    </div>
+    <span class="button">Open Android notification settings ↗</span>
+    <div class="nav"><span>HOME</span><span>HISTORY</span><span class="active">ALERTS</span><span>SETTINGS</span></div>
+  </div>
+
+  <div class="phone">
+    <div class="status"><span>09:41</span><span>5G&nbsp;&nbsp;87%</span></div>
+    <div class="top"><span class="brand">SETTINGS</span><span></span></div>
+    <div class="section-title">Account</div>
+    <div class="card">
+      <div class="row"><div class="copy">Google account<small>k••••@gmail.com</small></div><span class="value">Connected</span></div>
+      <div class="row"><div class="copy">Refresh token<small>Stored with Android Keystore</small></div><span class="value">Replace</span></div>
+    </div>
+    <div class="section-title">Sync</div>
+    <div class="card">
+      <div class="row"><div class="copy">Auto sync</div><div class="toggle"></div></div>
+      <div class="row"><div class="copy">Refresh interval<small>WorkManager timing is approximate</small></div><span class="value">30 min ›</span></div>
+      <div class="row"><div class="copy">Wi-Fi only</div><div class="toggle off"></div></div>
+    </div>
+    <div class="section-title">Appearance</div>
+    <div class="card"><div class="row"><div class="copy">Theme</div><span class="value">Dark ›</span></div><div class="row"><div class="copy">Reduce motion</div><span class="value">System</span></div></div>
+    <div class="section-title">Data</div>
+    <div class="card"><div class="row"><div class="copy">History retention</div><span class="value">90 days ›</span></div><div class="row"><div class="copy danger">Clear local history</div><span class="value">›</span></div></div>
+    <div class="nav"><span>HOME</span><span>HISTORY</span><span>ALERTS</span><span class="active">SETTINGS</span></div>
+  </div>
+</div>
+<div class="approval">V1 ไม่มี badge, widget, foreground service, boot setting, custom notification UI, camera หรือ QR</div>

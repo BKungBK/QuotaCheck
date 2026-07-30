@@ -1,27 +1,31 @@
 package com.quotacheck.app.feature.alerts
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import com.quotacheck.app.core.designsystem.QuotaCheckSpacing
 import com.quotacheck.app.core.designsystem.component.QuotaCard
+import com.quotacheck.app.core.designsystem.component.Stepper
 import com.quotacheck.app.core.model.UserPreferences
 
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
 fun AlertsScreen(
     uiState: UserPreferences,
     onLowThreshold: (Int) -> Unit = {},
@@ -35,7 +39,7 @@ fun AlertsScreen(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize().semantics { testTag = "alerts_content" },
-        contentPadding = PaddingValues(QuotaCheckSpacing.md),
+        contentPadding = PaddingValues(QuotaCheckSpacing.lg),
         verticalArrangement = Arrangement.spacedBy(QuotaCheckSpacing.md),
     ) {
         item { Text("Alerts", style = MaterialTheme.typography.titleLarge) }
@@ -55,13 +59,13 @@ fun AlertsScreen(
         }
         item {
             OutlinedButton(onClick = onOpenNotificationSettings, modifier = Modifier.fillMaxWidth().semantics { testTag = "notification_settings" }) {
+                Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.padding(end = QuotaCheckSpacing.xs))
                 Text("Android notification settings")
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable private fun ThresholdCard(label: String, value: Int, validValues: IntRange, onValue: (Int) -> Unit, tag: String) {
     QuotaCard {
         Text(label, style = MaterialTheme.typography.titleMedium)
@@ -69,18 +73,34 @@ fun AlertsScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable private fun ThresholdControls(value: Int, validValues: IntRange, onValue: (Int) -> Unit, tag: String, enabled: Boolean = true) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text("Notify at $value% remaining", style = MaterialTheme.typography.bodyMedium)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(QuotaCheckSpacing.sm), verticalArrangement = Arrangement.spacedBy(QuotaCheckSpacing.sm)) {
-            OutlinedButton(onClick = { onValue((value - 1).coerceAtLeast(validValues.first)) }, enabled = enabled && value > validValues.first) { Text("-") }
-            OutlinedButton(onClick = { onValue((value + 1).coerceAtMost(validValues.last)) }, enabled = enabled && value < validValues.last, modifier = Modifier.semantics { testTag = tag }) { Text("+") }
-        }
+        Stepper(
+            value = "$value%",
+            onDecrement = { onValue((value - 1).coerceAtLeast(validValues.first)) },
+            onIncrement = { onValue((value + 1).coerceAtMost(validValues.last)) },
+            decrementEnabled = enabled && value > validValues.first,
+            incrementEnabled = enabled && value < validValues.last,
+            tag = tag,
+        )
+    }
 }
 
 @Composable private fun AlertToggle(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, tag: String) {
-    androidx.compose.foundation.layout.Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(label, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.semantics { testTag = tag })
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.semantics { testTag = tag },
+            colors = SwitchDefaults.colors(
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                uncheckedBorderColor = MaterialTheme.colorScheme.outline,
+            ),
+        )
     }
 }

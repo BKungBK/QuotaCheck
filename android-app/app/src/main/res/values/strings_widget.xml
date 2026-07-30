@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_name">QuotaCheck Widget</string>
+    <string name="widget_description">Shows AI quota remaining across pools</string>
+    <string name="widget_refresh">Refresh Quota</string>
+    <string name="widget_no_data">No quota pools configured</string>
+    <string name="widget_updated_just_now">Updated just now</string>
+</resources>

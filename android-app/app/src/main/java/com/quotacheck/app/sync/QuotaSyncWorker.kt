@@ -8,6 +8,8 @@ import com.quotacheck.app.QuotaCheckApp
 import com.quotacheck.app.core.model.FailureCategory
 import com.quotacheck.app.core.model.SyncResult
 import com.quotacheck.app.core.model.SyncTrigger
+import com.quotacheck.app.widget.QuotaWidget
+import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -34,6 +36,9 @@ class QuotaSyncWorker(
             preferences = container.userPreferencesRepository.preferences.first(),
             consecutiveFailuresBefore = consecutiveFailuresBefore,
         )
+        runCatching {
+            QuotaWidget().updateAll(applicationContext)
+        }
         resultFor(result)
     }
 

@@ -1,0 +1,50 @@
+<style>
+  .stage{display:flex;justify-content:center;margin-top:22px}
+  .phone{width:330px;background:#171717;border:1px solid #3a3a3a;border-radius:30px;padding:16px 15px 13px;color:#e8e8e8}
+  .status,.top,.pool-head,.meta,.nav{display:flex;align-items:center;justify-content:space-between}
+  .status{font-size:10px;color:#8d8d8d;margin:0 4px 18px}
+  .top{margin-bottom:14px}.brand{font-size:12px;font-weight:700;letter-spacing:.06em}
+  .live{font-size:9px;color:#bdbdbd}.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#bdbdbd;margin-right:5px}
+  .eyebrow{font-size:9px;color:#a7a7a7;text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+  .card{background:#202020;border:1px solid #383838;border-radius:12px;padding:14px;margin-bottom:10px}
+  .pool{padding:15px 0;border-bottom:1px solid #303030}.pool:last-child{border-bottom:0;padding-bottom:2px}
+  .pool:first-of-type{padding-top:12px}.pool-head{font-size:12px}.pool-head strong{font-size:15px;font-variant-numeric:tabular-nums}
+  .reset{font-size:9px;color:#8f8f8f;margin-top:5px}.bar{height:5px;background:#3a3a3a;border-radius:3px;overflow:hidden;margin-top:10px}.fill{height:100%;background:#777;border-radius:3px}
+  .low strong,.low .reset{color:#c9a25c}.low .fill{background:#a78248}
+  .meta{font-size:10px;color:#909090;padding:5px 3px 13px}.meta b{color:#d0d0d0}
+  .spacer{height:70px}.nav{border-top:1px solid #303030;padding:12px 4px 3px;color:#747474;font-size:9px}.nav .active{color:#e0e0e0}
+  .note{max-width:560px;margin:18px auto 0;color:#888;font-size:13px;text-align:center}
+</style>
+
+<h2>Home · approved direction</h2>
+<p class="subtitle">ไม่มี summary card — เปิดหน้าแล้วเห็นทุก quota ทันที</p>
+
+<div class="stage">
+  <div class="phone">
+    <div class="status"><span>09:41</span><span>5G&nbsp;&nbsp;87%</span></div>
+    <div class="top"><span class="brand">QUOTACHECK</span><span class="live"><i class="dot"></i>LIVE</span></div>
+    <div class="card">
+      <span class="eyebrow">All quotas</span>
+      <div class="pool">
+        <div class="pool-head"><span>Gemini · 5 hours</span><strong>68%</strong></div>
+        <div class="reset">Resets in 3h 14m</div><div class="bar"><div class="fill" style="width:68%"></div></div>
+      </div>
+      <div class="pool">
+        <div class="pool-head"><span>Gemini · Weekly</span><strong>42%</strong></div>
+        <div class="reset">Resets Friday, 09:00</div><div class="bar"><div class="fill" style="width:42%"></div></div>
+      </div>
+      <div class="pool low">
+        <div class="pool-head"><span>Claude · 5 hours</span><strong>18%</strong></div>
+        <div class="reset">Low · resets in 1h 24m</div><div class="bar"><div class="fill" style="width:18%"></div></div>
+      </div>
+      <div class="pool">
+        <div class="pool-head"><span>Claude · Weekly</span><strong>76%</strong></div>
+        <div class="reset">Resets Sunday, 16:30</div><div class="bar"><div class="fill" style="width:76%"></div></div>
+      </div>
+    </div>
+    <div class="meta"><span>Updated 2 min ago · Auto 30 min</span><b>↻ Refresh</b></div>
+    <div class="spacer"></div>
+    <div class="nav"><span class="active">HOME</span><span>HISTORY</span><span>ALERTS</span><span>SETTINGS</span></div>
+  </div>
+</div>
+<p class="note">ลำดับ pool คงที่ตาม provider; ทุกแถวมี quota, remaining percentage, progress และ reset time ครบในตัวเอง</p>

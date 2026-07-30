@@ -1,0 +1,95 @@
+<style>
+  .phones { display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:20px; margin-top:20px; }
+  .choice { cursor:pointer; }
+  .phone { background:#171717; border:1px solid #3a3a3a; border-radius:28px; padding:16px 14px 12px; min-height:520px; color:#e5e5e5; box-shadow:none; }
+  .status { display:flex; justify-content:space-between; color:#969696; font-size:10px; margin:0 4px 18px; }
+  .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .brand { font-size:12px; font-weight:700; letter-spacing:.05em; }
+  .live { font-size:9px; color:#bdbdbd; }
+  .dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#bdbdbd; margin-right:5px; }
+  .hero,.panel { background:#202020; border:1px solid #383838; border-radius:12px; padding:16px; margin-bottom:10px; }
+  .eyebrow { color:#a6a6a6; font-size:9px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
+  .big { font-size:42px; font-weight:650; line-height:1; margin:14px 0 6px; font-variant-numeric:tabular-nums; }
+  .sub { color:#9a9a9a; font-size:10px; }
+  .bar { height:6px; border-radius:4px; background:#3a3a3a; overflow:hidden; margin:16px 0 10px; }
+  .fill { height:100%; background:#777; border-radius:4px; }
+  .stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .stat { background:#202020; border:1px solid #383838; border-radius:10px; padding:12px; }
+  .stat strong { display:block; font-size:17px; margin-top:5px; }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid #303030; font-size:11px; }
+  .row:last-child { border-bottom:0; }
+  .mini-bar { height:4px; background:#383838; border-radius:3px; margin-top:7px; overflow:hidden; }
+  .mini-fill { height:100%; background:#777; }
+  .warning { color:#c9a25c; }
+  .nav { margin-top:auto; display:flex; justify-content:space-around; border-top:1px solid #303030; padding-top:12px; color:#777; font-size:9px; }
+  .nav .active { color:#ddd; }
+  .phone-inner { min-height:485px; display:flex; flex-direction:column; }
+  .choice.selected .phone { outline:2px solid #888; outline-offset:3px; }
+  @media (max-width:900px){ .phones{grid-template-columns:1fr;} }
+</style>
+
+<h2>Home ควรตอบ 3 คำถามใน 3 วินาที</h2>
+<p class="subtitle">เหลือเท่าไร · ใช้ไปเท่าไร · รีเซ็ตเมื่อไร — เลือก hierarchy ที่อ่านง่ายที่สุด</p>
+
+<div class="phones">
+  <div class="choice card" data-choice="a-hero-first" onclick="toggleSelect(this)">
+    <div class="phone"><div class="phone-inner">
+      <div class="status"><span>09:41</span><span>5G&nbsp; 87%</span></div>
+      <div class="top"><span class="brand">QUOTACHECK</span><span class="live"><i class="dot"></i>LIVE</span></div>
+      <div class="hero">
+        <div class="eyebrow">Quota remaining</div>
+        <div class="big">68%</div>
+        <div class="sub">34,000 of 50,000 units left</div>
+        <div class="bar"><div class="fill" style="width:68%"></div></div>
+        <div class="row"><span>Resets</span><strong>3d 14h</strong></div>
+        <div class="row"><span>Updated</span><span>2 min ago</span></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="eyebrow">Used</span><strong>16,000</strong></div>
+        <div class="stat"><span class="eyebrow">Today</span><strong>1,240</strong></div>
+      </div>
+      <div class="panel" style="margin-top:10px"><div class="row"><span>7-day pace</span><strong>Normal</strong></div></div>
+      <div class="nav"><span class="active">HOME</span><span>HISTORY</span><span>ALERTS</span><span>SETTINGS</span></div>
+    </div></div>
+    <div class="card-body"><h3>A · Hero-first</h3><p>ตัวเลขเหลือเด่นที่สุด แล้วค่อยใช้ไป/รีเซ็ต/แนวโน้ม เหมาะกับการเปิดดูเร็ว</p></div>
+  </div>
+
+  <div class="choice card" data-choice="b-pool-list" onclick="toggleSelect(this)">
+    <div class="phone"><div class="phone-inner">
+      <div class="status"><span>09:41</span><span>5G&nbsp; 87%</span></div>
+      <div class="top"><span class="brand">QUOTACHECK</span><span class="live"><i class="dot"></i>LIVE</span></div>
+      <div class="panel">
+        <div class="eyebrow">All quotas</div>
+        <div class="row" style="display:block"><span>Gemini · 5 hours</span><strong style="float:right">68%</strong><div class="mini-bar"><div class="mini-fill" style="width:68%"></div></div></div>
+        <div class="row" style="display:block"><span>Gemini · Weekly</span><strong style="float:right">42%</strong><div class="mini-bar"><div class="mini-fill" style="width:42%"></div></div></div>
+        <div class="row" style="display:block"><span>Claude · 5 hours</span><strong class="warning" style="float:right">18%</strong><div class="mini-bar"><div class="mini-fill" style="width:18%;background:#b08a4d"></div></div></div>
+        <div class="row" style="display:block"><span>Claude · Weekly</span><strong style="float:right">76%</strong><div class="mini-bar"><div class="mini-fill" style="width:76%"></div></div></div>
+      </div>
+      <div class="panel"><div class="row"><span>Next reset</span><strong>1h 24m</strong></div><div class="row"><span>Updated</span><span>2 min ago</span></div></div>
+      <div class="nav"><span class="active">HOME</span><span>HISTORY</span><span>ALERTS</span><span>SETTINGS</span></div>
+    </div></div>
+    <div class="card-body"><h3>B · Pool-first</h3><p>เห็นทุก quota พร้อมกัน เหมาะกับหลาย pool แต่คำตอบหลักไม่เด่นเท่า A</p></div>
+  </div>
+
+  <div class="choice card" data-choice="c-command-center" onclick="toggleSelect(this)">
+    <div class="phone"><div class="phone-inner">
+      <div class="status"><span>09:41</span><span>5G&nbsp; 87%</span></div>
+      <div class="top"><span class="brand">QUOTACHECK</span><span>↻</span></div>
+      <div class="stats">
+        <div class="stat"><span class="eyebrow">Remaining</span><strong>68%</strong></div>
+        <div class="stat"><span class="eyebrow">Used</span><strong>16K</strong></div>
+        <div class="stat"><span class="eyebrow">Reset</span><strong>3d</strong></div>
+        <div class="stat"><span class="eyebrow">Status</span><strong>Live</strong></div>
+      </div>
+      <div class="panel" style="margin-top:10px">
+        <div class="eyebrow">Usage trend</div>
+        <div style="height:105px;display:flex;align-items:end;gap:7px;padding-top:16px">
+          <i style="height:25%;flex:1;background:#444"></i><i style="height:42%;flex:1;background:#555"></i><i style="height:35%;flex:1;background:#4b4b4b"></i><i style="height:65%;flex:1;background:#666"></i><i style="height:48%;flex:1;background:#585858"></i><i style="height:76%;flex:1;background:#777"></i><i style="height:58%;flex:1;background:#666"></i>
+        </div>
+      </div>
+      <div class="panel"><div class="row"><span>Projected depletion</span><strong>Safe</strong></div><div class="row"><span>Last sync</span><span>2 min ago</span></div></div>
+      <div class="nav"><span class="active">HOME</span><span>HISTORY</span><span>ALERTS</span><span>SETTINGS</span></div>
+    </div></div>
+    <div class="card-body"><h3>C · Command center</h3><p>ข้อมูลหนาแน่นและมีกราฟทันที แต่ใช้เวลาสแกนนานกว่า</p></div>
+  </div>
+</div>

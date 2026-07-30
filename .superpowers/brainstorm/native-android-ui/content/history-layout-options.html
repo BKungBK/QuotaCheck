@@ -1,0 +1,59 @@
+<style>
+  .phones{display:grid;grid-template-columns:repeat(2,minmax(280px,350px));justify-content:center;gap:26px;margin-top:22px}
+  .choice{cursor:pointer}.phone{background:#171717;border:1px solid #3a3a3a;border-radius:30px;padding:16px 15px 13px;color:#e8e8e8;min-height:540px}
+  .status,.top,.segments,.metric,.day,.nav{display:flex;align-items:center;justify-content:space-between}.status{font-size:10px;color:#888;margin:0 4px 18px}.top{margin-bottom:14px}.brand{font-size:12px;font-weight:700;letter-spacing:.06em}
+  .segments{background:#202020;border:1px solid #383838;border-radius:9px;padding:3px;margin-bottom:10px}.segments span{flex:1;text-align:center;padding:7px;font-size:9px;color:#888;border-radius:6px}.segments .active{background:#383838;color:#e5e5e5}
+  .card{background:#202020;border:1px solid #383838;border-radius:12px;padding:14px;margin-bottom:10px}.eyebrow{font-size:9px;color:#a7a7a7;text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+  .metric{margin:10px 0 15px}.metric strong{font-size:26px}.metric small{font-size:9px;color:#929292;text-align:right}
+  .chart{height:120px;display:flex;align-items:end;gap:8px;border-bottom:1px solid #3b3b3b;padding:0 2px}.bar{flex:1;background:#666;border-radius:3px 3px 0 0}.bar.today{background:#909090}.labels{display:flex;justify-content:space-around;font-size:8px;color:#777;margin-top:6px}
+  .day{padding:9px 0;border-bottom:1px solid #303030;font-size:10px}.day:last-child{border:0}.day strong{font-size:11px}.day small{color:#858585;margin-left:8px}
+  .heat{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:14px}.cell{aspect-ratio:1;border-radius:4px;background:#2e2e2e}.c2{background:#404040}.c3{background:#565656}.c4{background:#737373}.c5{background:#8b8b8b}
+  .legend{display:flex;justify-content:flex-end;gap:4px;margin-top:10px}.legend i{width:9px;height:9px;border-radius:2px;background:#333}.legend i:nth-child(2){background:#555}.legend i:nth-child(3){background:#777}.legend i:nth-child(4){background:#999}
+  .nav{margin-top:22px;border-top:1px solid #303030;padding:12px 4px 3px;color:#747474;font-size:9px}.nav .active{color:#e0e0e0}
+  .choice.selected .phone{outline:2px solid #888;outline-offset:3px}@media(max-width:750px){.phones{grid-template-columns:1fr}}
+</style>
+
+<h2>History ควรอ่านแนวโน้มแบบไหน?</h2>
+<p class="subtitle">ทั้งสองแบบสลับ Day / Week / Month และเลือก quota pool ได้</p>
+<div class="phones">
+  <div class="choice card" data-choice="history-bars-timeline" onclick="toggleSelect(this)">
+    <div class="phone">
+      <div class="status"><span>09:41</span><span>5G&nbsp;&nbsp;87%</span></div>
+      <div class="top"><span class="brand">USAGE HISTORY</span><span>Gemini ▾</span></div>
+      <div class="segments"><span>DAY</span><span class="active">WEEK</span><span>MONTH</span></div>
+      <div class="card">
+        <span class="eyebrow">Used this week</span><div class="metric"><strong>8,420</strong><small>↓ 12%<br>vs last week</small></div>
+        <div class="chart"><i class="bar" style="height:34%"></i><i class="bar" style="height:56%"></i><i class="bar" style="height:43%"></i><i class="bar" style="height:72%"></i><i class="bar" style="height:58%"></i><i class="bar" style="height:88%"></i><i class="bar today" style="height:65%"></i></div>
+        <div class="labels"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Daily breakdown</span>
+        <div class="day"><span>Today <small>24 syncs</small></span><strong>1,240</strong></div>
+        <div class="day"><span>Yesterday <small>31 syncs</small></span><strong>1,680</strong></div>
+        <div class="day"><span>Saturday <small>18 syncs</small></span><strong>920</strong></div>
+      </div>
+      <div class="nav"><span>HOME</span><span class="active">HISTORY</span><span>ALERTS</span><span>SETTINGS</span></div>
+    </div>
+    <div class="card-body"><h3>A · Bars + timeline</h3><p>เทียบปริมาณรายวันได้ตรงไปตรงมา และมีตัวเลขย้อนหลังให้ตรวจ</p></div>
+  </div>
+
+  <div class="choice card" data-choice="history-heatmap" onclick="toggleSelect(this)">
+    <div class="phone">
+      <div class="status"><span>09:41</span><span>5G&nbsp;&nbsp;87%</span></div>
+      <div class="top"><span class="brand">USAGE HISTORY</span><span>Gemini ▾</span></div>
+      <div class="segments"><span>DAY</span><span>WEEK</span><span class="active">MONTH</span></div>
+      <div class="card">
+        <span class="eyebrow">July activity</span><div class="metric"><strong>31.8K</strong><small>Average<br>1,026 / day</small></div>
+        <div class="heat">
+          <i class="cell c2"></i><i class="cell c3"></i><i class="cell"></i><i class="cell c4"></i><i class="cell c3"></i><i class="cell c5"></i><i class="cell c2"></i>
+          <i class="cell c3"></i><i class="cell c2"></i><i class="cell c4"></i><i class="cell"></i><i class="cell c3"></i><i class="cell c4"></i><i class="cell c5"></i>
+          <i class="cell"></i><i class="cell c2"></i><i class="cell c3"></i><i class="cell c5"></i><i class="cell c4"></i><i class="cell c2"></i><i class="cell c3"></i>
+          <i class="cell c2"></i><i class="cell c4"></i><i class="cell c3"></i><i class="cell c2"></i><i class="cell c5"></i><i class="cell c3"></i><i class="cell c4"></i>
+        </div><div class="legend"><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div class="card"><div class="day"><span>Highest day</span><strong>2,480</strong></div><div class="day"><span>Lowest day</span><strong>320</strong></div><div class="day"><span>Active days</span><strong>27</strong></div></div>
+      <div class="nav"><span>HOME</span><span class="active">HISTORY</span><span>ALERTS</span><span>SETTINGS</span></div>
+    </div>
+    <div class="card-body"><h3>B · Calendar heatmap</h3><p>เห็น pattern ทั้งเดือนได้เร็ว แต่เทียบค่ารายวันแม่นยำน้อยกว่า</p></div>
+  </div>
+</div>

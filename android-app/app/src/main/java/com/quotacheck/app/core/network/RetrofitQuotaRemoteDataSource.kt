@@ -31,7 +31,7 @@ internal class RetrofitQuotaRemoteDataSource(
 
         val summaryResponse = runCatching {
             val primary = quotaApi.retrieveUserQuotaSummary(cloudEndpoint(PrivateApiContract.QUOTA_SUMMARY_PATH), authorization, body = request)
-            if (!primary.isSuccessful && projectId != null) {
+            if (!primary.isSuccessful && primary.code() != 404 && projectId != null) {
                 quotaApi.retrieveUserQuotaSummary(cloudEndpoint(PrivateApiContract.QUOTA_SUMMARY_PATH), authorization, body = ProjectRequestDto())
             } else {
                 primary

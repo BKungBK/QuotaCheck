@@ -84,11 +84,13 @@ class OnboardingViewModel(
             val syncResult = repository.synchronize(SyncTrigger.ONBOARDING)
             android.util.Log.d("QuotaCheckVM", "Sync result: $syncResult")
             if (syncResult !is SyncResult.Success) {
+                clearPersistedToken()
                 if (syncResult is SyncResult.AuthRequired) {
-                    clearPersistedToken()
                     mutableUiState.value = OnboardingUiState.ValidationFailed
-                    return
+                } else {
+                    mutableUiState.value = OnboardingUiState.InitialSyncFailed
                 }
+                return
             }
             preferences.setOnboardingCompleted(true)
             runCatching {

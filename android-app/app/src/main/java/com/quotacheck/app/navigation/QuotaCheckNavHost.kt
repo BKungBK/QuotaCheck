@@ -2,6 +2,9 @@ package com.quotacheck.app.navigation
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,7 +43,15 @@ fun QuotaCheckNavHost(
         }
         onNotificationRouteHandled()
     }
-    NavHost(navController = navController, startDestination = Destination.Home.route, modifier = modifier) {
+    NavHost(
+        navController = navController,
+        startDestination = Destination.Home.route,
+        modifier = modifier,
+        enterTransition = { fadeIn(tween(180)) },
+        exitTransition = { fadeOut(tween(120)) },
+        popEnterTransition = { fadeIn(tween(180)) },
+        popExitTransition = { fadeOut(tween(120)) },
+    ) {
         composable(Destination.Home.route) {
             val container = (LocalContext.current.applicationContext as QuotaCheckApp).appContainer
             val viewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(container.quotaRepository, container.userPreferencesRepository, container.syncScheduler))

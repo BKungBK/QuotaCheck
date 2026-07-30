@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.quotacheck.app.core.designsystem.QuotaCheckSpacing
 import com.quotacheck.app.core.designsystem.component.QuotaCard
+import com.quotacheck.app.core.designsystem.component.SegmentedControl
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -50,11 +51,14 @@ fun HistoryScreen(
             }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(QuotaCheckSpacing.sm), modifier = Modifier.semantics { testTag = "history_period_control" }) {
-                HistoryPeriod.entries.forEach { period ->
-                    FilterChip(selected = uiState.period == period, onClick = { onSelectPeriod(period) }, label = { Text(period.label) })
-                }
-            }
+            SegmentedControl(
+                options = HistoryPeriod.entries,
+                selected = uiState.period,
+                onSelect = onSelectPeriod,
+                label = { it.label },
+                modifier = Modifier.semantics { testTag = "history_period_control" },
+                tag = "history_period",
+            )
         }
         if (uiState.isEmpty) {
             item { QuotaCard { Text("Not enough history yet. Usage will appear after more quota changes.", modifier = Modifier.semantics { testTag = "history_empty" }) } }

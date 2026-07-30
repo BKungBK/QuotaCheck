@@ -93,7 +93,7 @@ class PrivateQuotaContractTest {
         assertTrue(result.isSuccess)
         val pools = result.getOrThrow()
         assertEquals(1, pools.size)
-        assertEquals("gemini-1.5-pro", pools.first().poolId)
+        assertEquals("gemini", pools.first().poolId)
         assertEquals(0.8, pools.first().remainingFraction, 0.001)
     }
 
